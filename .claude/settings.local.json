@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(gh pr create --base develop --head feature/MADE-4-agent-scoring-logic --title 'feat\\(MADE-4\\): agent scoring logic implemented' --body ':*)",
+      "Bash(gh pr create --base develop --head feature/MADE-1-initial-clean-architecture-setup --title 'feat\\(MADE-1\\): initial clean architecture setup & workflow documentation' --body ':*)",
+      "Bash(gh pr create --base develop --head feature/MADE-2-llm-client-ssot-config --title 'feat\\(MADE-2\\): LLM client SSOT config consolidation' --body ':*)"
+    ]
+  }
+}
