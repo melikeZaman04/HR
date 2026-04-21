@@ -7,4 +7,4 @@ from app.domain.agents.salary_agent import SalaryAgent
 class AgentFactory:
     @staticmethod
     def create_default_agents() -> list[Agent]:
-        return [StrategyAgent(), CultureAgent(), SalaryAgent()]
+        return [StrategyAgent(), SalaryAgent(), CultureAgent()]

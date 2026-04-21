@@ -6,7 +6,7 @@ from app.presentation.api.v1.routes.scenarios import router as scenarios_router
 
 app = FastAPI(
     title="AI Decision Ecosystem Engine",
-    description="Multi-Agent Decision Support System with CEO, CFO, HR agents",
+    description="Multi-Agent Decision Support System with Strategy, Salary, Culture agents",
     version="1.0.0",
 )
 

@@ -1,4 +1,6 @@
-from app.domain.agents.culture_agent import CultureAgent
+import os
+
+content = '''from app.domain.agents.culture_agent import CultureAgent
 from app.domain.models import AgentMessage, ScenarioInput
 
 def test_culture_supports_long_tenure() -> None:
@@ -32,3 +34,7 @@ def test_culture_opposes_job_hopper() -> None:
     assert isinstance(result, AgentMessage)
     assert result.stance == "oppose"
     assert result.metrics["churn_risk"] > 5
+'''
+
+with open('tests/test_culture_agent.py', 'w', encoding='utf-8') as f:
+    f.write(content)

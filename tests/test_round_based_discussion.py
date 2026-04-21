@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock, patch
 
 from app.application.models import RoundBasedSimulationResult, RoundResult
 from app.application.use_cases.scenario_service import ScenarioSimulationService
-from app.domain.agents.ceo_agent import CEOAgent
-from app.domain.agents.cfo_agent import CFOAgent
-from app.domain.agents.hr_agent import HRAgent
+from app.domain.agents.strategy_agent import StrategyAgent
+from app.domain.agents.salary_agent import SalaryAgent
+from app.domain.agents.culture_agent import CultureAgent
 from app.domain.models import AgentMessage, AgentResult, AggregatedDecision, FinalDecision, ScenarioInput, ScenarioRecord
 from app.domain.services.aggregator import DecisionAggregator
 
@@ -27,12 +27,13 @@ def mock_scenario_record() -> ScenarioRecord:
     """Create a mock scenario record for testing."""
     return ScenarioRecord(
         id=1,
-        name="Test Project",
-        description="A test scenario",
-        budget_million_usd=5.0,
-        expected_roi_percent=40.0,
-        risk_level=5,
-        team_readiness=7,
+        candidate_name="Test Candidate",
+        applied_role="Backend Developer",
+        experience_years=5,
+        tech_test_score=85,
+        avg_months_per_job=24,
+        glassdoor_score=4.5,
+        expected_salary=80000,
         created_at=datetime.now(),
     )
 
@@ -65,12 +66,13 @@ def high_agreement_scenario() -> ScenarioRecord:
     """Scenario that leads to high agreement (all support)."""
     return ScenarioRecord(
         id=2,
-        name="Great Opportunity",
-        description="High ROI, low risk",
-        budget_million_usd=2.0,
-        expected_roi_percent=80.0,
-        risk_level=2,
-        team_readiness=9,
+        candidate_name="Ideal Candidate",
+        applied_role="Backend Developer",
+        experience_years=5,
+        tech_test_score=85,
+        avg_months_per_job=24,
+        glassdoor_score=4.5,
+        expected_salary=80000,
         created_at=datetime.now(),
     )
 
@@ -80,12 +82,13 @@ def divisive_scenario() -> ScenarioRecord:
     """Scenario that leads to mixed opinions."""
     return ScenarioRecord(
         id=3,
-        name="Risky Venture",
-        description="High potential but risky",
-        budget_million_usd=8.0,
-        expected_roi_percent=60.0,
-        risk_level=8,
-        team_readiness=4,
+        candidate_name="Mixed Signals",
+        applied_role="Backend Developer",
+        experience_years=5,
+        tech_test_score=85,
+        avg_months_per_job=24,
+        glassdoor_score=4.5,
+        expected_salary=80000,
         created_at=datetime.now(),
     )
 
@@ -105,7 +108,7 @@ class TestRoundExecution:
         assert 1 <= result.total_rounds <= 2
         assert len(result.rounds) == result.total_rounds
 
-    async def test_three_rounds_executed(self, service):
+    async def test_tcultureee_rounds_executed(self, service):
         """Verify that 3 rounds are executed when n_rounds=3."""
         result = await service.run_simulation(scenario_id=1, n_rounds=3)
 
@@ -120,14 +123,14 @@ class TestRoundExecution:
         assert len(result.rounds) == 1
         assert result.rounds[0].round_number == 1
 
-    async def test_each_round_has_three_agents(self, service):
+    async def test_each_round_has_tcultureee_agents(self, service):
         """Verify each round contains messages from all 3 agents."""
         result = await service.run_simulation(scenario_id=1, n_rounds=2)
 
         for round_result in result.rounds:
             assert len(round_result.messages) == 3
             agent_names = {msg.agent for msg in round_result.messages}
-            assert agent_names == {"CEO", "CFO", "HR"}
+            assert agent_names == {"Strategy", "Salary", "Culture"}
 
 
 class TestRoundNumberIncrement:
@@ -163,34 +166,34 @@ class TestAgentsSeeHistory:
         """Verify agents receive previous messages from earlier rounds."""
         scenario_repo, agent_output_repo, final_decision_repo = mock_repositories
 
-        received_messages = {"CEO": [], "CFO": [], "HR": []}
+        received_messages = {"Strategy": [], "Salary": [], "Culture": []}
 
-        class TrackedCEOAgent(CEOAgent):
+        class TrackedStrategyAgent(StrategyAgent):
             def analyze(self, scenario, previous_messages=None):
-                received_messages["CEO"].append(
+                received_messages["Strategy"].append(
                     len(previous_messages) if previous_messages else 0
                 )
                 return super().analyze(scenario, previous_messages)
 
-        class TrackedCFOAgent(CFOAgent):
+        class TrackedSalaryAgent(SalaryAgent):
             def analyze(self, scenario, previous_messages=None):
-                received_messages["CFO"].append(
+                received_messages["Salary"].append(
                     len(previous_messages) if previous_messages else 0
                 )
                 return super().analyze(scenario, previous_messages)
 
-        class TrackedHRAgent(HRAgent):
+        class TrackedCultureAgent(CultureAgent):
             def analyze(self, scenario, previous_messages=None):
-                received_messages["HR"].append(
+                received_messages["Culture"].append(
                     len(previous_messages) if previous_messages else 0
                 )
                 return super().analyze(scenario, previous_messages)
 
         with patch('app.application.use_cases.scenario_service.AgentFactory') as mock_factory:
             mock_factory.create_default_agents.return_value = [
-                TrackedCEOAgent(),
-                TrackedCFOAgent(),
-                TrackedHRAgent(),
+                TrackedStrategyAgent(),
+                TrackedSalaryAgent(),
+                TrackedCultureAgent(),
             ]
 
             service = ScenarioSimulationService(
@@ -201,23 +204,23 @@ class TestAgentsSeeHistory:
 
             await service.run_simulation(scenario_id=1, n_rounds=2)
 
-        assert received_messages["CEO"][0] == 0  # Round 1
-        assert received_messages["CFO"][0] == 1  # Round 1
-        assert received_messages["HR"][0] == 2   # Round 1
+        assert received_messages["Strategy"][0] == 0  # Round 1
+        assert received_messages["Salary"][0] == 1  # Round 1
+        assert received_messages["Culture"][0] == 2   # Round 1
 
-        if len(received_messages["CEO"]) > 1:    # Round 2 if not early stopped
-            assert received_messages["CEO"][1] == 3
-            assert received_messages["CFO"][1] == 4
-            assert received_messages["HR"][1] == 5
+        if len(received_messages["Strategy"]) > 1:    # Round 2 if not early stopped
+            assert received_messages["Strategy"][1] == 3
+            assert received_messages["Salary"][1] == 4
+            assert received_messages["Culture"][1] == 5
 
-    async def test_cfo_sees_ceo_message_in_same_round(self, service):
-        """CFO should see CEO's message from the same round."""
+    async def test_salary_sees_strategy_message_in_same_round(self, service):
+        """Salary should see Strategy's message from the same round."""
         result = await service.run_simulation(scenario_id=1, n_rounds=1)
 
         round_messages = result.rounds[0].messages
-        assert round_messages[0].agent == "CEO"
-        assert round_messages[1].agent == "CFO"
-        assert round_messages[2].agent == "HR"
+        assert round_messages[0].agent == "Strategy"
+        assert round_messages[1].agent == "Salary"
+        assert round_messages[2].agent == "Culture"
 
 
 # ============================================================================
@@ -233,12 +236,13 @@ class TestConfidenceChanges:
 
         divisive = ScenarioRecord(
             id=1,
-            name="Divisive Project",
-            description="Mixed signals",
-            budget_million_usd=10.0,
-            expected_roi_percent=30.0,
-            risk_level=7,
-            team_readiness=4,
+            candidate_name="Divisive Candidate",
+            applied_role="Backend Developer",
+            experience_years=5,
+            tech_test_score=85,
+            avg_months_per_job=24,
+            glassdoor_score=4.5,
+            expected_salary=80000,
             created_at=datetime.now(),
         )
         scenario_repo.get_by_id.return_value = divisive
@@ -256,7 +260,7 @@ class TestConfidenceChanges:
             round2_conf = {msg.agent: msg.confidence for msg in result.rounds[1].messages}
 
             changes = []
-            for agent in ["CEO", "CFO", "HR"]:
+            for agent in ["Strategy", "Salary", "Culture"]:
                 if abs(round1_conf[agent] - round2_conf[agent]) > 0.001:
                     changes.append(agent)
 
@@ -269,12 +273,13 @@ class TestConfidenceChanges:
 
         scenario = ScenarioRecord(
             id=1,
-            name="Test",
-            description="Test",
-            budget_million_usd=5.0,
-            expected_roi_percent=50.0,
-            risk_level=6,
-            team_readiness=5,
+            candidate_name="Test Candidate",
+            applied_role="Backend Developer",
+            experience_years=5,
+            tech_test_score=85,
+            avg_months_per_job=24,
+            glassdoor_score=4.5,
+            expected_salary=80000,
             created_at=datetime.now(),
         )
         scenario_repo.get_by_id.return_value = scenario
@@ -305,12 +310,13 @@ class TestEarlyTermination:
 
         unanimous = ScenarioRecord(
             id=1,
-            name="Easy Win",
-            description="High ROI, low risk, ready team",
-            budget_million_usd=1.0,
-            expected_roi_percent=100.0,
-            risk_level=1,
-            team_readiness=10,
+            candidate_name="Ideal Candidate",
+            applied_role="Backend Developer",
+            experience_years=5,
+            tech_test_score=85,
+            avg_months_per_job=24,
+            glassdoor_score=4.5,
+            expected_salary=80000,
             created_at=datetime.now(),
         )
         scenario_repo.get_by_id.return_value = unanimous
@@ -348,7 +354,7 @@ class TestEarlyTermination:
             prev_by_agent = {msg.agent: msg for msg in prev_round}
             last_by_agent = {msg.agent: msg for msg in last_round}
 
-            for agent in ["CEO", "CFO", "HR"]:
+            for agent in ["Strategy", "Salary", "Culture"]:
                 assert prev_by_agent[agent].stance == last_by_agent[agent].stance
                 assert abs(prev_by_agent[agent].confidence - last_by_agent[agent].confidence) <= 0.01
 
@@ -463,9 +469,15 @@ class TestIntegration:
         )
 
         high_opp = ScenarioRecord(
-            id=1, name="High", description="",
-            budget_million_usd=2.0, expected_roi_percent=100.0,
-            risk_level=2, team_readiness=9, created_at=datetime.now()
+            id=1,
+            candidate_name="Strong Candidate",
+            applied_role="Backend Developer",
+            experience_years=8,
+            tech_test_score=95,
+            avg_months_per_job=36,
+            glassdoor_score=4.5,
+            expected_salary=90000,
+            created_at=datetime.now(),
         )
         scenario_repo.get_by_id.return_value = high_opp
         result_high = await service.run_simulation(scenario_id=1, n_rounds=2)
@@ -474,9 +486,15 @@ class TestIntegration:
         final_decision_repo.reset_mock()
 
         low_opp = ScenarioRecord(
-            id=2, name="Low", description="",
-            budget_million_usd=20.0, expected_roi_percent=-20.0,
-            risk_level=9, team_readiness=2, created_at=datetime.now()
+            id=2,
+            candidate_name="Weak Candidate",
+            applied_role="Backend Developer",
+            experience_years=1,
+            tech_test_score=35,
+            avg_months_per_job=4,
+            glassdoor_score=2.0,
+            expected_salary=200000,
+            created_at=datetime.now(),
         )
         scenario_repo.get_by_id.return_value = low_opp
         result_low = await service.run_simulation(scenario_id=2, n_rounds=2)

@@ -33,9 +33,9 @@ class FakeScenarioQueryService:
         return SimulationReadResult(
             scenario=self.scenario,
             agent_outputs=[
-                AgentResult(agent_name="CEO", score=80, rationale="ok"),
-                AgentResult(agent_name="CFO", score=70, rationale="ok"),
-                AgentResult(agent_name="HR", score=75, rationale="ok"),
+                AgentResult(agent_name="Strategy", score=80, rationale="ok"),
+                AgentResult(agent_name="Salary", score=70, rationale="ok"),
+                AgentResult(agent_name="Culture", score=75, rationale="ok"),
             ],
             aggregated_decision=AggregatedDecision(
                 final_score=75.0,

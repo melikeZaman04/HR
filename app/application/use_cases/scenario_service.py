@@ -76,7 +76,7 @@ class ScenarioSimulationService:
         """
         Run a round-based multi-agent discussion simulation.
 
-        Each round, agents analyze sequentially (CEO → CFO → HR).
+        Each round, agents analyze sequentially (Strategy → Salary → Culture).
         Each agent sees all messages from current and previous rounds.
         Discussion terminates early if consensus or stability is reached.
 

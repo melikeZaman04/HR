@@ -67,10 +67,7 @@ class SalaryAgent(Agent):
         elif diff_ratio > 1.05:  # Expected is slightly over
             stance = "oppose"
             confidence = 0.60
-        elif diff_ratio < 0.8:  # Suspiciously low
-            stance = "neutral"
-            confidence = 0.60
-        else: # Within reasonable budget (0.8 - 1.05)
+        else:  # Within or under budget
             stance = "support"
             confidence = 0.80
 

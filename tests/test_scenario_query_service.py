@@ -42,9 +42,9 @@ async def test_get_simulation_returns_data_when_exists() -> None:
 
     output_repo = AsyncMock()
     output_repo.get_outputs_by_scenario_id.return_value = [
-        AgentResult(agent_name="CEO", score=80, rationale="ok"),
-        AgentResult(agent_name="CFO", score=70, rationale="ok"),
-        AgentResult(agent_name="HR", score=75, rationale="ok"),
+        AgentResult(agent_name="Strategy", score=80, rationale="ok"),
+        AgentResult(agent_name="Salary", score=70, rationale="ok"),
+        AgentResult(agent_name="Culture", score=75, rationale="ok"),
     ]
 
     final_repo = AsyncMock()
