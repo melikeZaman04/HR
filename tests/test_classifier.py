@@ -1,24 +1,24 @@
-"""Tests for the ScenarioClassifier service — HireSync candidate context."""
+"""Tests for the CandidateProfiler service — HireSync candidate context."""
 import pytest
 
 from app.domain.models import ScenarioInput
 from app.domain.services.classifier import (
+    CandidateProfiler,
     ClassificationResult,
-    ScenarioClassifier,
     ScenarioType,
 )
 
 
-class TestScenarioClassifier:
-    """Tests for ScenarioClassifier."""
+class TestCandidateProfiler:
+    """Tests for CandidateProfiler."""
 
     @pytest.fixture
-    def classifier(self) -> ScenarioClassifier:
-        return ScenarioClassifier()
+    def classifier(self) -> CandidateProfiler:
+        return CandidateProfiler()
 
     # --- High Growth Scenario Tests ---
 
-    def test_classifies_high_growth_scenario(self, classifier: ScenarioClassifier):
+    def test_classifies_high_growth_scenario(self, classifier: CandidateProfiler):
         """High tech score + deep experience → HIGH_GROWTH."""
         scenario = ScenarioInput(
             candidate_name="Senior Dev",
@@ -37,7 +37,7 @@ class TestScenarioClassifier:
         assert "Strategy" in result.recommended_weights
         assert result.recommended_weights["Strategy"] > result.recommended_weights["Culture"]
 
-    def test_high_growth_reasoning_mentions_growth(self, classifier: ScenarioClassifier):
+    def test_high_growth_reasoning_mentions_growth(self, classifier: CandidateProfiler):
         """HIGH_GROWTH reasoning should mention growth or senior profile."""
         scenario = ScenarioInput(
             candidate_name="Senior Dev",
@@ -56,7 +56,7 @@ class TestScenarioClassifier:
 
     # --- Cost Optimization Scenario Tests ---
 
-    def test_classifies_cost_optimization_scenario(self, classifier: ScenarioClassifier):
+    def test_classifies_cost_optimization_scenario(self, classifier: CandidateProfiler):
         """Low salary expectation → COST_OPTIMIZATION."""
         scenario = ScenarioInput(
             candidate_name="Budget Dev",
@@ -75,7 +75,7 @@ class TestScenarioClassifier:
 
     # --- Team Expansion Scenario Tests ---
 
-    def test_classifies_team_expansion_scenario(self, classifier: ScenarioClassifier):
+    def test_classifies_team_expansion_scenario(self, classifier: CandidateProfiler):
         """Very low experience + good culture fit → TEAM_EXPANSION."""
         scenario = ScenarioInput(
             candidate_name="Junior Dev",
@@ -95,7 +95,7 @@ class TestScenarioClassifier:
 
     # --- Strategic Pivot Scenario Tests ---
 
-    def test_classifies_strategic_pivot_scenario(self, classifier: ScenarioClassifier):
+    def test_classifies_strategic_pivot_scenario(self, classifier: CandidateProfiler):
         """High tech score but frequent job changes → STRATEGIC_PIVOT."""
         scenario = ScenarioInput(
             candidate_name="Job Hopper",
@@ -114,7 +114,7 @@ class TestScenarioClassifier:
 
     # --- Maintenance Scenario Tests ---
 
-    def test_classifies_maintenance_scenario(self, classifier: ScenarioClassifier):
+    def test_classifies_maintenance_scenario(self, classifier: CandidateProfiler):
         """Balanced average candidate → MAINTENANCE or COST_OPTIMIZATION."""
         scenario = ScenarioInput(
             candidate_name="Average Dev",
@@ -132,7 +132,7 @@ class TestScenarioClassifier:
 
     # --- Classification Result Structure Tests ---
 
-    def test_classification_result_has_all_type_scores(self, classifier: ScenarioClassifier):
+    def test_classification_result_has_all_type_scores(self, classifier: CandidateProfiler):
         """All scenario types should have scores."""
         scenario = ScenarioInput(
             candidate_name="Test Candidate",
@@ -150,7 +150,7 @@ class TestScenarioClassifier:
         assert all(st.value in result.type_scores for st in ScenarioType)
         assert all(0 <= score <= 1 for score in result.type_scores.values())
 
-    def test_confidence_is_bounded(self, classifier: ScenarioClassifier):
+    def test_confidence_is_bounded(self, classifier: CandidateProfiler):
         """Confidence should be between 0 and 1."""
         scenarios = [
             ScenarioInput(candidate_name="A", applied_role="Dev", experience_years=1, tech_test_score=10, avg_months_per_job=1, glassdoor_score=1.0, expected_salary=20000),
@@ -162,7 +162,7 @@ class TestScenarioClassifier:
             result = classifier.classify(scenario)
             assert 0.0 <= result.confidence <= 1.0
 
-    def test_recommended_weights_sum_to_one(self, classifier: ScenarioClassifier):
+    def test_recommended_weights_sum_to_one(self, classifier: CandidateProfiler):
         """Recommended weights should sum to approximately 1."""
         scenario = ScenarioInput(
             candidate_name="Test",
@@ -179,7 +179,7 @@ class TestScenarioClassifier:
         total = sum(result.recommended_weights.values())
         assert abs(total - 1.0) < 0.01
 
-    def test_classification_has_reasoning(self, classifier: ScenarioClassifier):
+    def test_classification_has_reasoning(self, classifier: CandidateProfiler):
         """Classification should include human-readable reasoning."""
         scenario = ScenarioInput(
             candidate_name="Test",
@@ -198,21 +198,21 @@ class TestScenarioClassifier:
 
     # --- Agent Weights Getter Tests ---
 
-    def test_get_agent_weights_for_high_growth(self, classifier: ScenarioClassifier):
+    def test_get_agent_weights_for_high_growth(self, classifier: CandidateProfiler):
         """HIGH_GROWTH should prioritize Strategy."""
         weights = classifier.get_agent_weights(ScenarioType.HIGH_GROWTH)
 
         assert weights["Strategy"] >= weights["Salary"]
         assert weights["Strategy"] >= weights["Culture"]
 
-    def test_get_agent_weights_for_cost_optimization(self, classifier: ScenarioClassifier):
+    def test_get_agent_weights_for_cost_optimization(self, classifier: CandidateProfiler):
         """COST_OPTIMIZATION should prioritize Salary."""
         weights = classifier.get_agent_weights(ScenarioType.COST_OPTIMIZATION)
 
         assert weights["Salary"] >= weights["Strategy"]
         assert weights["Salary"] >= weights["Culture"]
 
-    def test_get_agent_weights_for_team_expansion(self, classifier: ScenarioClassifier):
+    def test_get_agent_weights_for_team_expansion(self, classifier: CandidateProfiler):
         """TEAM_EXPANSION should prioritize Culture."""
         weights = classifier.get_agent_weights(ScenarioType.TEAM_EXPANSION)
 
@@ -221,7 +221,7 @@ class TestScenarioClassifier:
 
     # --- Edge Cases ---
 
-    def test_extreme_values_handled(self, classifier: ScenarioClassifier):
+    def test_extreme_values_handled(self, classifier: CandidateProfiler):
         """Extreme input values should not crash."""
         extreme_scenarios = [
             ScenarioInput(candidate_name="Min", applied_role="Dev", experience_years=0, tech_test_score=0, avg_months_per_job=1, glassdoor_score=1.0, expected_salary=1),
@@ -233,7 +233,7 @@ class TestScenarioClassifier:
             assert result.primary_type is not None
             assert 0.0 <= result.confidence <= 1.0
 
-    def test_secondary_type_only_if_confident(self, classifier: ScenarioClassifier):
+    def test_secondary_type_only_if_confident(self, classifier: CandidateProfiler):
         """Secondary type should only appear if score > 0.2."""
         scenario = ScenarioInput(
             candidate_name="Balanced",

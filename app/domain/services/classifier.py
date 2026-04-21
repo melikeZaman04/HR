@@ -50,9 +50,10 @@ class ClassificationResult:
     classification_reasoning: str
 
 
-class ScenarioClassifier:
+class CandidateProfiler:
     """
-    Senaryoları kural tabanlı ML ile stratejik kategorilere sınıflandırır.
+    Adayları kural tabanlı buluşsal (heuristic) yöntemle stratejik profillere sınıflandırır.
+    NOT: Bu bir ML modeli değil; etiketli veri gerektirmeyen deterministik bir kural motorudur.
 
     Normalize edilmiş özellik çıkarımı ve ağırlıklı puanlama ile
     en uygun senaryo kategorisini belirler.

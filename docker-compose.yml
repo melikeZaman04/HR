@@ -23,6 +23,7 @@ services:
     container_name: ai_decision_app
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/ai_decision_engine
+      LLM_BASE_URL: http://host.docker.internal:11434/v1
     ports:
       - "8000:8000"
     depends_on:

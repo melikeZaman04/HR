@@ -93,10 +93,25 @@ class SalaryAgent(Agent):
                     
             if culture_stance_info:
                 cult_s, _ = culture_stance_info
-                # Eğer adayın bütçesi uygun olsa bile erken kaçma ihtimali varsa yatırımı (maaşı) riskli bul
                 if cult_s == "oppose" and stance == "support":
                     confidence -= 0.20
                     reasoning_notes.append("Culture Agent highlighted churn risk; reducing financial commitment confidence.")
+
+            # Stance flip: if both other agents strongly oppose, shift to neutral
+            strategy_strongly_opposes = (
+                strategy_stance_info is not None
+                and strategy_stance_info[0] == "oppose"
+                and strategy_stance_info[1] >= 0.70
+            )
+            culture_strongly_opposes = (
+                culture_stance_info is not None
+                and culture_stance_info[0] == "oppose"
+                and culture_stance_info[1] >= 0.70
+            )
+            if stance == "support" and strategy_strongly_opposes and culture_strongly_opposes:
+                stance = "neutral"
+                confidence = max(0.40, confidence - 0.10)
+                reasoning_notes.append("Revised to neutral: strong consensus opposition from Strategy and Culture agents.")
 
         confidence = max(0.3, min(1.0, confidence))
         

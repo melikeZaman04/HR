@@ -34,6 +34,7 @@ def mock_scenario_record() -> ScenarioRecord:
         avg_months_per_job=24,
         glassdoor_score=4.5,
         expected_salary=80000,
+        salary_currency="TRY",
         created_at=datetime.now(),
     )
 
@@ -73,6 +74,7 @@ def high_agreement_scenario() -> ScenarioRecord:
         avg_months_per_job=24,
         glassdoor_score=4.5,
         expected_salary=80000,
+        salary_currency="TRY",
         created_at=datetime.now(),
     )
 
@@ -89,6 +91,7 @@ def divisive_scenario() -> ScenarioRecord:
         avg_months_per_job=24,
         glassdoor_score=4.5,
         expected_salary=80000,
+        salary_currency="TRY",
         created_at=datetime.now(),
     )
 
@@ -243,6 +246,7 @@ class TestConfidenceChanges:
             avg_months_per_job=24,
             glassdoor_score=4.5,
             expected_salary=80000,
+            salary_currency="TRY",
             created_at=datetime.now(),
         )
         scenario_repo.get_by_id.return_value = divisive
@@ -280,6 +284,7 @@ class TestConfidenceChanges:
             avg_months_per_job=24,
             glassdoor_score=4.5,
             expected_salary=80000,
+            salary_currency="TRY",
             created_at=datetime.now(),
         )
         scenario_repo.get_by_id.return_value = scenario
@@ -317,6 +322,7 @@ class TestEarlyTermination:
             avg_months_per_job=24,
             glassdoor_score=4.5,
             expected_salary=80000,
+            salary_currency="TRY",
             created_at=datetime.now(),
         )
         scenario_repo.get_by_id.return_value = unanimous
@@ -477,6 +483,7 @@ class TestIntegration:
             avg_months_per_job=36,
             glassdoor_score=4.5,
             expected_salary=90000,
+            salary_currency="TRY",
             created_at=datetime.now(),
         )
         scenario_repo.get_by_id.return_value = high_opp
@@ -494,6 +501,7 @@ class TestIntegration:
             avg_months_per_job=4,
             glassdoor_score=2.0,
             expected_salary=200000,
+            salary_currency="TRY",
             created_at=datetime.now(),
         )
         scenario_repo.get_by_id.return_value = low_opp
