@@ -6,9 +6,9 @@ def test_aggregator_returns_approve_for_high_average() -> None:
     aggregator = DecisionAggregator()
     result = aggregator.aggregate(
         [
-            AgentResult(agent_name="CEO", score=90, rationale=""),
-            AgentResult(agent_name="CFO", score=85, rationale=""),
-            AgentResult(agent_name="HR", score=80, rationale=""),
+            AgentResult(agent_name="Strategy", score=90, rationale=""),
+            AgentResult(agent_name="Salary", score=85, rationale=""),
+            AgentResult(agent_name="Culture", score=80, rationale=""),
         ]
     )
 
@@ -20,9 +20,9 @@ def test_aggregator_returns_revise_for_mid_average() -> None:
     aggregator = DecisionAggregator()
     result = aggregator.aggregate(
         [
-            AgentResult(agent_name="CEO", score=60, rationale=""),
-            AgentResult(agent_name="CFO", score=50, rationale=""),
-            AgentResult(agent_name="HR", score=55, rationale=""),
+            AgentResult(agent_name="Strategy", score=60, rationale=""),
+            AgentResult(agent_name="Salary", score=50, rationale=""),
+            AgentResult(agent_name="Culture", score=55, rationale=""),
         ]
     )
 
@@ -34,9 +34,9 @@ def test_aggregator_returns_reject_for_low_average() -> None:
     aggregator = DecisionAggregator()
     result = aggregator.aggregate(
         [
-            AgentResult(agent_name="CEO", score=30, rationale=""),
-            AgentResult(agent_name="CFO", score=40, rationale=""),
-            AgentResult(agent_name="HR", score=35, rationale=""),
+            AgentResult(agent_name="Strategy", score=30, rationale=""),
+            AgentResult(agent_name="Salary", score=40, rationale=""),
+            AgentResult(agent_name="Culture", score=35, rationale=""),
         ]
     )
 
@@ -44,16 +44,16 @@ def test_aggregator_returns_reject_for_low_average() -> None:
     assert result.decision == FinalDecision.REJECT
 
 
-def test_aggregator_boundary_approve_threshold() -> None:
+def test_aggregator_boundary_approve_tcultureeshold() -> None:
     """Test boundary at 75: score=74.99 should be REVISE, score=75 should be APPROVE."""
     aggregator = DecisionAggregator()
     
     # Average of ~74.99 should be REVISE
     result_below = aggregator.aggregate(
         [
-            AgentResult(agent_name="CEO", score=74, rationale=""),
-            AgentResult(agent_name="CFO", score=75, rationale=""),
-            AgentResult(agent_name="HR", score=75, rationale=""),
+            AgentResult(agent_name="Strategy", score=74, rationale=""),
+            AgentResult(agent_name="Salary", score=75, rationale=""),
+            AgentResult(agent_name="Culture", score=75, rationale=""),
         ]
     )
     # (74 + 75 + 75) / 3 = 74.67
@@ -63,25 +63,25 @@ def test_aggregator_boundary_approve_threshold() -> None:
     # Average of 75 should be APPROVE
     result_at = aggregator.aggregate(
         [
-            AgentResult(agent_name="CEO", score=75, rationale=""),
-            AgentResult(agent_name="CFO", score=75, rationale=""),
-            AgentResult(agent_name="HR", score=75, rationale=""),
+            AgentResult(agent_name="Strategy", score=75, rationale=""),
+            AgentResult(agent_name="Salary", score=75, rationale=""),
+            AgentResult(agent_name="Culture", score=75, rationale=""),
         ]
     )
     assert result_at.final_score == 75.0
     assert result_at.decision == FinalDecision.APPROVE
 
 
-def test_aggregator_boundary_revise_threshold() -> None:
+def test_aggregator_boundary_revise_tcultureeshold() -> None:
     """Test boundary at 50: score=49.99 should be REJECT, score=50 should be REVISE."""
     aggregator = DecisionAggregator()
     
     # Average of ~49.67 should be REJECT
     result_below = aggregator.aggregate(
         [
-            AgentResult(agent_name="CEO", score=49, rationale=""),
-            AgentResult(agent_name="CFO", score=50, rationale=""),
-            AgentResult(agent_name="HR", score=50, rationale=""),
+            AgentResult(agent_name="Strategy", score=49, rationale=""),
+            AgentResult(agent_name="Salary", score=50, rationale=""),
+            AgentResult(agent_name="Culture", score=50, rationale=""),
         ]
     )
     # (49 + 50 + 50) / 3 = 49.67
@@ -91,9 +91,9 @@ def test_aggregator_boundary_revise_threshold() -> None:
     # Average of 50 should be REVISE
     result_at = aggregator.aggregate(
         [
-            AgentResult(agent_name="CEO", score=50, rationale=""),
-            AgentResult(agent_name="CFO", score=50, rationale=""),
-            AgentResult(agent_name="HR", score=50, rationale=""),
+            AgentResult(agent_name="Strategy", score=50, rationale=""),
+            AgentResult(agent_name="Salary", score=50, rationale=""),
+            AgentResult(agent_name="Culture", score=50, rationale=""),
         ]
     )
     assert result_at.final_score == 50.0

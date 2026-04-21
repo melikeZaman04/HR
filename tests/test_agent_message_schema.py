@@ -7,9 +7,9 @@ communication protocol with correct field types and constraints.
 
 import pytest
 
-from app.domain.agents.ceo_agent import CEOAgent
-from app.domain.agents.cfo_agent import CFOAgent
-from app.domain.agents.hr_agent import HRAgent
+from app.domain.agents.strategy_agent import StrategyAgent
+from app.domain.agents.salary_agent import SalaryAgent
+from app.domain.agents.culture_agent import CultureAgent
 from app.domain.models import AgentMessage, ScenarioInput
 
 
@@ -33,27 +33,29 @@ def sample_scenario() -> ScenarioInput:
 
 @pytest.fixture
 def high_risk_scenario() -> ScenarioInput:
-    """High-risk, high-reward scenario."""
+    """High churn risk candidate scenario."""
     return ScenarioInput(
-        name="Risky Venture",
-        description="High risk scenario for edge case testing",
-        budget_million_usd=20.0,
-        expected_roi_percent=80.0,
-        risk_level=9,
-        team_readiness=3,
+        candidate_name="Risky Candidate",
+        applied_role="Backend Developer",
+        experience_years=5,
+        tech_test_score=85,
+        avg_months_per_job=4,
+        glassdoor_score=2.5,
+        expected_salary=120000,
     )
 
 
 @pytest.fixture
 def low_risk_scenario() -> ScenarioInput:
-    """Conservative low-risk scenario."""
+    """Stable, conservative candidate scenario."""
     return ScenarioInput(
-        name="Safe Bet",
-        description="Low risk scenario for edge case testing",
-        budget_million_usd=2.0,
-        expected_roi_percent=15.0,
-        risk_level=2,
-        team_readiness=9,
+        candidate_name="Safe Candidate",
+        applied_role="Backend Developer",
+        experience_years=5,
+        tech_test_score=75,
+        avg_months_per_job=36,
+        glassdoor_score=4.5,
+        expected_salary=70000,
     )
 
 
@@ -189,19 +191,19 @@ class TestAgentMessageLegacyConversion:
 
 
 # ============================================================================
-# CEO Agent Schema Tests
+# Strategy Agent Schema Tests
 # ============================================================================
 
-class TestCEOAgentMessageSchema:
-    """Tests for CEO agent message format compliance."""
+class TestStrategyAgentMessageSchema:
+    """Tests for Strategy agent message format compliance."""
     
     def test_ceo_message_has_required_fields(self, sample_scenario):
-        """CEO message should have all required AgentMessage fields."""
-        agent = CEOAgent()
+        """Strategy message should have all required AgentMessage fields."""
+        agent = StrategyAgent()
         msg = agent.analyze(sample_scenario)
         
         assert isinstance(msg, AgentMessage)
-        assert msg.agent == "CEO"
+        assert msg.agent == "Strategy"
         assert msg.stance in ("support", "oppose", "neutral")
         assert isinstance(msg.confidence, float)
         assert 0.0 <= msg.confidence <= 1.0
@@ -210,52 +212,52 @@ class TestCEOAgentMessageSchema:
         assert isinstance(msg.metrics, dict)
     
     def test_ceo_metrics_keys(self, sample_scenario):
-        """CEO metrics should contain expected keys."""
-        agent = CEOAgent()
+        """Strategy metrics should contain expected keys."""
+        agent = StrategyAgent()
         msg = agent.analyze(sample_scenario)
-        
-        assert "growth_potential" in msg.metrics
-        assert "market_alignment" in msg.metrics
-    
+
+        assert "tech_alignment" in msg.metrics
+        assert "experience_depth" in msg.metrics
+
     def test_ceo_metrics_values_in_range(self, sample_scenario):
-        """CEO metric values should be within 0-10 range."""
-        agent = CEOAgent()
+        """Strategy metric values should be within 0-10 range."""
+        agent = StrategyAgent()
         msg = agent.analyze(sample_scenario)
-        
-        assert 0 <= msg.metrics["growth_potential"] <= 10
-        assert 0 <= msg.metrics["market_alignment"] <= 10
+
+        assert 0 <= msg.metrics["tech_alignment"] <= 10
+        assert 0 <= msg.metrics["experience_depth"] <= 10
     
     def test_ceo_with_previous_messages(self, sample_scenario):
-        """CEO should accept and process previous messages."""
+        """Strategy should accept and process previous messages."""
         cfo_msg = AgentMessage(
-            agent="CFO",
+            agent="Salary",
             stance="oppose",
             confidence=0.8,
             reasoning="Financial concerns",
             metrics={"risk_score": 7, "cost_impact": 5.0, "roi_estimate": 10.0},
         )
         
-        agent = CEOAgent()
+        agent = StrategyAgent()
         msg = agent.analyze(sample_scenario, previous_messages=[cfo_msg])
         
         assert isinstance(msg, AgentMessage)
-        assert msg.agent == "CEO"
+        assert msg.agent == "Strategy"
 
 
 # ============================================================================
-# CFO Agent Schema Tests
+# Salary Agent Schema Tests
 # ============================================================================
 
-class TestCFOAgentMessageSchema:
-    """Tests for CFO agent message format compliance."""
+class TestSalaryAgentMessageSchema:
+    """Tests for Salary agent message format compliance."""
     
     def test_cfo_message_has_required_fields(self, sample_scenario):
-        """CFO message should have all required AgentMessage fields."""
-        agent = CFOAgent()
+        """Salary message should have all required AgentMessage fields."""
+        agent = SalaryAgent()
         msg = agent.analyze(sample_scenario)
         
         assert isinstance(msg, AgentMessage)
-        assert msg.agent == "CFO"
+        assert msg.agent == "Salary"
         assert msg.stance in ("support", "oppose", "neutral")
         assert isinstance(msg.confidence, float)
         assert 0.0 <= msg.confidence <= 1.0
@@ -264,50 +266,42 @@ class TestCFOAgentMessageSchema:
         assert isinstance(msg.metrics, dict)
     
     def test_cfo_metrics_keys(self, sample_scenario):
-        """CFO metrics should contain expected keys."""
-        agent = CFOAgent()
+        """Salary metrics should contain expected keys."""
+        agent = SalaryAgent()
         msg = agent.analyze(sample_scenario)
-        
-        assert "risk_score" in msg.metrics
-        assert "cost_impact" in msg.metrics
-        assert "roi_estimate" in msg.metrics
-    
-    def test_cfo_metrics_risk_score_in_range(self, sample_scenario):
-        """CFO risk_score should be within 0-10 range."""
-        agent = CFOAgent()
+
+        assert "budget_fit" in msg.metrics
+        assert "market_alignment" in msg.metrics
+
+    def test_cfo_metrics_budget_fit_in_range(self, sample_scenario):
+        """Salary budget_fit should be within 0-10 range."""
+        agent = SalaryAgent()
         msg = agent.analyze(sample_scenario)
-        
-        assert 0 <= msg.metrics["risk_score"] <= 10
-    
-    def test_cfo_metrics_cost_impact_is_positive(self, sample_scenario):
-        """CFO cost_impact should be non-negative."""
-        agent = CFOAgent()
+
+        assert 0 <= msg.metrics["budget_fit"] <= 10
+
+    def test_cfo_metrics_market_alignment_in_range(self, sample_scenario):
+        """Salary market_alignment should be within 0-10 range."""
+        agent = SalaryAgent()
         msg = agent.analyze(sample_scenario)
-        
-        assert msg.metrics["cost_impact"] >= 0
-    
-    def test_cfo_metrics_roi_estimate_is_float(self, sample_scenario):
-        """CFO roi_estimate should be a float representing percentage."""
-        agent = CFOAgent()
-        msg = agent.analyze(sample_scenario)
-        
-        assert isinstance(msg.metrics["roi_estimate"], float)
+
+        assert 0 <= msg.metrics["market_alignment"] <= 10
 
 
 # ============================================================================
-# HR Agent Schema Tests
+# Culture Agent Schema Tests
 # ============================================================================
 
-class TestHRAgentMessageSchema:
-    """Tests for HR agent message format compliance."""
+class TestCultureAgentMessageSchema:
+    """Tests for Culture agent message format compliance."""
     
     def test_hr_message_has_required_fields(self, sample_scenario):
-        """HR message should have all required AgentMessage fields."""
-        agent = HRAgent()
+        """Culture message should have all required AgentMessage fields."""
+        agent = CultureAgent()
         msg = agent.analyze(sample_scenario)
         
         assert isinstance(msg, AgentMessage)
-        assert msg.agent == "HR"
+        assert msg.agent == "Culture"
         assert msg.stance in ("support", "oppose", "neutral")
         assert isinstance(msg.confidence, float)
         assert 0.0 <= msg.confidence <= 1.0
@@ -316,22 +310,20 @@ class TestHRAgentMessageSchema:
         assert isinstance(msg.metrics, dict)
     
     def test_hr_metrics_keys(self, sample_scenario):
-        """HR metrics should contain expected keys."""
-        agent = HRAgent()
+        """Culture metrics should contain expected keys."""
+        agent = CultureAgent()
         msg = agent.analyze(sample_scenario)
-        
-        assert "talent_availability" in msg.metrics
-        assert "team_impact" in msg.metrics
-        assert "workload_score" in msg.metrics
-    
+
+        assert "churn_risk" in msg.metrics
+        assert "cultural_fit" in msg.metrics
+
     def test_hr_metrics_values_in_range(self, sample_scenario):
-        """HR metric values should be within 0-10 range."""
-        agent = HRAgent()
+        """Culture metric values should be within 0-10 range."""
+        agent = CultureAgent()
         msg = agent.analyze(sample_scenario)
-        
-        assert 0 <= msg.metrics["talent_availability"] <= 10
-        assert 0 <= msg.metrics["team_impact"] <= 10
-        assert 0 <= msg.metrics["workload_score"] <= 10
+
+        assert 0 <= msg.metrics["churn_risk"] <= 10
+        assert 0 <= msg.metrics["cultural_fit"] <= 10
 
 
 # ============================================================================
@@ -343,25 +335,25 @@ class TestAgentInteraction:
     
     def test_sequential_agent_execution(self, sample_scenario):
         """Agents should be able to run sequentially with message passing."""
-        ceo = CEOAgent()
-        cfo = CFOAgent()
-        hr = HRAgent()
+        ceo = StrategyAgent()
+        cfo = SalaryAgent()
+        hr = CultureAgent()
         
-        # CEO analyzes first (no previous messages)
+        # Strategy analyzes first (no previous messages)
         ceo_msg = ceo.analyze(sample_scenario)
-        assert ceo_msg.agent == "CEO"
+        assert ceo_msg.agent == "Strategy"
         
-        # CFO sees CEO's message
+        # Salary sees Strategy's message
         cfo_msg = cfo.analyze(sample_scenario, previous_messages=[ceo_msg])
-        assert cfo_msg.agent == "CFO"
+        assert cfo_msg.agent == "Salary"
         
-        # HR sees both CEO and CFO messages
+        # Culture sees both Strategy and Salary messages
         hr_msg = hr.analyze(sample_scenario, previous_messages=[ceo_msg, cfo_msg])
-        assert hr_msg.agent == "HR"
+        assert hr_msg.agent == "Culture"
     
     def test_all_agents_produce_valid_legacy_results(self, sample_scenario):
         """All agent messages should convert to valid legacy results."""
-        agents = [CEOAgent(), CFOAgent(), HRAgent()]
+        agents = [StrategyAgent(), SalaryAgent(), CultureAgent()]
         messages = []
         
         for agent in agents:
@@ -375,9 +367,9 @@ class TestAgentInteraction:
     
     def test_edge_case_high_risk_scenario(self, high_risk_scenario):
         """Agents should handle extreme high-risk scenarios."""
-        ceo = CEOAgent()
-        cfo = CFOAgent()
-        hr = HRAgent()
+        ceo = StrategyAgent()
+        cfo = SalaryAgent()
+        hr = CultureAgent()
         
         ceo_msg = ceo.analyze(high_risk_scenario)
         cfo_msg = cfo.analyze(high_risk_scenario, [ceo_msg])
@@ -390,9 +382,9 @@ class TestAgentInteraction:
     
     def test_edge_case_low_risk_scenario(self, low_risk_scenario):
         """Agents should handle conservative low-risk scenarios."""
-        ceo = CEOAgent()
-        cfo = CFOAgent()
-        hr = HRAgent()
+        ceo = StrategyAgent()
+        cfo = SalaryAgent()
+        hr = CultureAgent()
         
         ceo_msg = ceo.analyze(low_risk_scenario)
         cfo_msg = cfo.analyze(low_risk_scenario, [ceo_msg])

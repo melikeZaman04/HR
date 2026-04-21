@@ -50,9 +50,10 @@ class ClassificationResult:
     classification_reasoning: str
 
 
-class ScenarioClassifier:
+class CandidateProfiler:
     """
-    Senaryoları kural tabanlı ML ile stratejik kategorilere sınıflandırır.
+    Adayları kural tabanlı buluşsal (heuristic) yöntemle stratejik profillere sınıflandırır.
+    NOT: Bu bir ML modeli değil; etiketli veri gerektirmeyen deterministik bir kural motorudur.
 
     Normalize edilmiş özellik çıkarımı ve ağırlıklı puanlama ile
     en uygun senaryo kategorisini belirler.
@@ -63,22 +64,19 @@ class ScenarioClassifier:
     - Benzer geçmiş senaryoların önerilmesi
     """
 
-    # Sınıflandırma için özellik eşikleri
-    HIGH_BUDGET_THRESHOLD = 10.0   # Milyon USD
-    HIGH_ROI_THRESHOLD = 30.0      # Yüzde
-    LOW_ROI_THRESHOLD = 10.0       # Yüzde
-    HIGH_RISK_THRESHOLD = 7        # 1-10 ölçeği
-    LOW_RISK_THRESHOLD = 3         # 1-10 ölçeği
-    HIGH_READINESS_THRESHOLD = 7   # 1-10 ölçeği
-    LOW_READINESS_THRESHOLD = 4    # 1-10 ölçeği
+    # HireSync sınıflandırma eşikleri
+    HIGH_TECH_THRESHOLD = 80        # tech_test_score (0-100)
+    HIGH_EXP_THRESHOLD = 7          # experience_years
+    LOW_STABILITY_THRESHOLD = 12    # avg_months_per_job
+    HIGH_SALARY_THRESHOLD = 120000  # expected_salary (TL)
 
     # Senaryo tipine göre varsayılan ajan ağırlıkları
     DEFAULT_WEIGHTS = {
-        ScenarioType.HIGH_GROWTH:       {"CEO": 0.40, "CFO": 0.35, "HR": 0.25},
-        ScenarioType.COST_OPTIMIZATION: {"CEO": 0.25, "CFO": 0.50, "HR": 0.25},
-        ScenarioType.TEAM_EXPANSION:    {"CEO": 0.25, "CFO": 0.25, "HR": 0.50},
-        ScenarioType.STRATEGIC_PIVOT:   {"CEO": 0.45, "CFO": 0.30, "HR": 0.25},
-        ScenarioType.MAINTENANCE:       {"CEO": 0.33, "CFO": 0.34, "HR": 0.33},
+        ScenarioType.HIGH_GROWTH:       {"Strategy": 0.40, "Salary": 0.35, "Culture": 0.25},
+        ScenarioType.COST_OPTIMIZATION: {"Strategy": 0.25, "Salary": 0.50, "Culture": 0.25},
+        ScenarioType.TEAM_EXPANSION:    {"Strategy": 0.25, "Salary": 0.25, "Culture": 0.50},
+        ScenarioType.STRATEGIC_PIVOT:   {"Strategy": 0.45, "Salary": 0.30, "Culture": 0.25},
+        ScenarioType.MAINTENANCE:       {"Strategy": 0.33, "Salary": 0.34, "Culture": 0.33},
     }
 
     def classify(self, scenario: ScenarioInput) -> ClassificationResult:
@@ -119,107 +117,86 @@ class ScenarioClassifier:
 
     def _extract_features(self, scenario: ScenarioInput) -> dict[str, float]:
         """
-        Sınıflandırma için senaryodan normalize edilmiş özellikler çıkarır.
-
-        Tutarlı puanlama için tüm özellikler 0-1 aralığına normalize edilir.
+        HireSync aday verilerinden normalize edilmiş özellikler çıkarır.
+        Tüm özellikler 0-1 aralığına normalize edilir.
         """
-        # Bütçeyi normalize et (0-1, maksimum 50M)
-        budget_norm = min(scenario.budget_million_usd / 50.0, 1.0)
-
-        # ROI'yi normalize et (0-1, maksimum %100)
-        roi_norm = max(0, min(scenario.expected_roi_percent / 100.0, 1.0))
-
-        # Riski normalize et (1-10 → 0-1)
-        risk_norm = (scenario.risk_level - 1) / 9.0
-
-        # Ekip hazırlığını normalize et (1-10 → 0-1)
-        readiness_norm = (scenario.team_readiness - 1) / 9.0
-
-        # Türetilmiş özellikler
-        roi_risk_ratio = roi_norm / (risk_norm + 0.1)          # Riske göre ROI
-        investment_intensity = budget_norm * (1 - risk_norm)   # Güvenli yatırım kapasitesi
-        hr_criticality = (1 - readiness_norm) * budget_norm    # İK açığının önemi
+        tech_norm = scenario.tech_test_score / 100.0
+        exp_norm = min(scenario.experience_years / 15.0, 1.0)
+        stability_norm = min(scenario.avg_months_per_job / 48.0, 1.0)
+        culture_norm = (scenario.glassdoor_score - 1.0) / 4.0
+        salary_norm = min(scenario.expected_salary / 150000.0, 1.0)
 
         return {
-            "budget_norm": budget_norm,
-            "roi_norm": roi_norm,
-            "risk_norm": risk_norm,
-            "readiness_norm": readiness_norm,
-            "roi_risk_ratio": min(roi_risk_ratio, 2.0) / 2.0,  # 0-1'e normalize et
-            "investment_intensity": investment_intensity,
-            "hr_criticality": hr_criticality,
+            "tech_norm": tech_norm,
+            "exp_norm": exp_norm,
+            "stability_norm": stability_norm,
+            "culture_norm": culture_norm,
+            "salary_norm": salary_norm,
+            "seniority": tech_norm * exp_norm,
+            "churn_risk": 1.0 - stability_norm,
+            "budget_efficiency": 1.0 - salary_norm,
         }
 
     def _calculate_type_scores(self, features: dict[str, float]) -> dict[str, float]:
         """
         Her senaryo tipi için sınıflandırma puanı hesaplar.
-
-        Her tipe özgü ağırlıklı özellik kombinasyonları kullanır.
+        HireSync aday metriklerine dayalı ağırlıklı özellik kombinasyonları kullanır.
         """
         scores = {}
 
-        # HIGH_GROWTH: Yüksek ROI, yüksek bütçe, risk iştahı var
-        scores[ScenarioType.HIGH_GROWTH.value] = (
-            0.40 * features["roi_norm"] +
-            0.30 * features["budget_norm"] +
-            0.15 * features["roi_risk_ratio"] +
-            0.10 * features["readiness_norm"] +
-            0.05 * features["investment_intensity"]
+        # HIGH_GROWTH: Güçlü teknik profil + derin deneyim → kıdemli işe alım
+        high_growth = (
+            0.35 * features["tech_norm"] +
+            0.35 * features["exp_norm"] +
+            0.20 * features["seniority"] +
+            0.10 * features["stability_norm"]
         )
+        if features["tech_norm"] > 0.7 and features["exp_norm"] > 0.4:
+            high_growth *= 1.4
+        scores[ScenarioType.HIGH_GROWTH.value] = high_growth
 
-        # COST_OPTIMIZATION: Düşük bütçe, riskten kaçınan, sabit operasyonlar
-        cost_opt_score = (
-            0.35 * (1 - features["budget_norm"]) +
-            0.30 * (1 - features["risk_norm"]) +
-            0.15 * (1 - features["roi_norm"]) +
-            0.10 * features["readiness_norm"] +
-            0.10 * (1 - features["hr_criticality"])
+        # COST_OPTIMIZATION: Bütçe dostu aday → maaş odaklı değerlendirme
+        cost_opt = (
+            0.55 * features["budget_efficiency"] +
+            0.20 * features["tech_norm"] +
+            0.15 * features["stability_norm"] +
+            0.10 * features["culture_norm"]
         )
-        # Bütçe veya ROI orta/yüksekse ceza uygula
-        if features["budget_norm"] > 0.3 or features["roi_norm"] > 0.25:
-            cost_opt_score *= 0.6
-        scores[ScenarioType.COST_OPTIMIZATION.value] = cost_opt_score
+        if features["salary_norm"] < 0.4:
+            cost_opt *= 1.3
+        scores[ScenarioType.COST_OPTIMIZATION.value] = cost_opt
 
-        # TEAM_EXPANSION: İK odaklı, düşük ekip hazırlığı tetikleyici
-        team_score = (
-            0.45 * (1 - features["readiness_norm"]) +  # Düşük hazırlık = genişleme ihtiyacı
-            0.25 * features["hr_criticality"] +
-            0.15 * features["budget_norm"] +
-            0.10 * (1 - features["risk_norm"]) +
-            0.05 * features["roi_norm"]
+        # TEAM_EXPANSION: Junior/kültür uyumu odaklı → ekip büyümesi
+        team_exp = (
+            0.45 * (1.0 - features["exp_norm"]) +
+            0.30 * features["culture_norm"] +
+            0.15 * features["stability_norm"] +
+            0.10 * features["tech_norm"]
         )
-        # Hazırlık kritik derecede düşükse artır
-        if features["readiness_norm"] < 0.35:
-            team_score *= 1.4
-        scores[ScenarioType.TEAM_EXPANSION.value] = team_score
+        if features["exp_norm"] < 0.2:
+            team_exp *= 1.4
+        scores[ScenarioType.TEAM_EXPANSION.value] = team_exp
 
-        # STRATEGIC_PIVOT: Yüksek risk birincil göstergedir
-        pivot_score = (
-            0.45 * features["risk_norm"] +
-            0.25 * features["roi_norm"] +
-            0.15 * features["budget_norm"] +
-            0.10 * (1 - features["readiness_norm"]) +
-            0.05 * features["roi_risk_ratio"]
+        # STRATEGIC_PIVOT: Teknik olarak güçlü ama yüksek churn riski
+        pivot = (
+            0.40 * features["tech_norm"] +
+            0.40 * features["churn_risk"] +
+            0.10 * features["exp_norm"] +
+            0.10 * (1.0 - features["culture_norm"])
         )
-        # Risk yüksekse artır
-        if features["risk_norm"] > 0.7:
-            pivot_score *= 1.3
-        scores[ScenarioType.STRATEGIC_PIVOT.value] = pivot_score
+        if features["churn_risk"] > 0.5 and features["tech_norm"] > 0.6:
+            pivot *= 1.3
+        scores[ScenarioType.STRATEGIC_PIVOT.value] = pivot
 
-        # MAINTENANCE: Düşük risk, her şey orta, sabit durum
-        maintenance_score = (
-            0.35 * (1 - features["risk_norm"]) +
-            0.20 * (1 - abs(features["roi_norm"] - 0.15) * 2) +  # Düşük-orta ROI
-            0.20 * (1 - features["budget_norm"]) +
-            0.15 * features["readiness_norm"] +
-            0.10 * (1 - features["hr_criticality"])
+        # MAINTENANCE: Dengeli, orta profil → standart işe alım
+        maintenance = (
+            0.35 * features["stability_norm"] +
+            0.30 * features["culture_norm"] +
+            0.20 * (features["tech_norm"] * (1.0 - features["tech_norm"]) * 4.0) +
+            0.15 * features["budget_efficiency"]
         )
-        # ROI veya bütçe yüksekse ceza uygula
-        if features["roi_norm"] > 0.3 or features["budget_norm"] > 0.4:
-            maintenance_score *= 0.5
-        scores[ScenarioType.MAINTENANCE.value] = max(0, maintenance_score)
+        scores[ScenarioType.MAINTENANCE.value] = max(0.0, maintenance)
 
-        # Softmax benzeri normalizasyon uygula
         total = sum(scores.values()) + 0.001
         return {k: round(v / total, 3) for k, v in scores.items()}
 
@@ -229,37 +206,32 @@ class ScenarioClassifier:
         features: dict[str, float],
         primary_type: ScenarioType,
     ) -> str:
-        """Okunabilir sınıflandırma gerekçesi üretir."""
+        """HireSync aday değerlendirmesi için okunabilir sınıflandırma gerekçesi üretir."""
         reasons = []
 
         if primary_type == ScenarioType.HIGH_GROWTH:
-            reasons.append(f"High expected ROI of {scenario.expected_roi_percent}%")
-            if scenario.budget_million_usd >= self.HIGH_BUDGET_THRESHOLD:
-                reasons.append(f"Significant investment of ${scenario.budget_million_usd}M")
-            reasons.append("Focus on growth and market opportunity")
+            reasons.append(f"High-growth senior profile: {scenario.tech_test_score}/100 tech score")
+            reasons.append(f"{scenario.experience_years} years of experience depth")
+            reasons.append("Strategy-heavy senior talent evaluation")
 
         elif primary_type == ScenarioType.COST_OPTIMIZATION:
-            reasons.append("Conservative investment approach")
-            if scenario.risk_level <= self.LOW_RISK_THRESHOLD:
-                reasons.append(f"Low risk tolerance (level {scenario.risk_level})")
-            reasons.append("Focus on efficiency and cost control")
+            reasons.append(f"Budget-efficient: {scenario.expected_salary:,} TL salary expectation")
+            reasons.append("Salary fit is the primary decision axis")
 
         elif primary_type == ScenarioType.TEAM_EXPANSION:
-            if scenario.team_readiness <= self.LOW_READINESS_THRESHOLD:
-                reasons.append(f"Team readiness gap (level {scenario.team_readiness}/10)")
-            reasons.append("HR-centric decision with talent implications")
-            reasons.append("Focus on team capability building")
+            reasons.append(f"Junior-mid profile: {scenario.experience_years} years experience")
+            reasons.append("Culture fit and retention are critical for growth hire")
+            reasons.append("Team capacity building opportunity")
 
         elif primary_type == ScenarioType.STRATEGIC_PIVOT:
-            if scenario.risk_level >= self.HIGH_RISK_THRESHOLD:
-                reasons.append(f"High risk level ({scenario.risk_level}/10)")
-            reasons.append("Major strategic direction change")
-            reasons.append("Requires balanced multi-perspective analysis")
+            reasons.append(f"High churn risk: {scenario.avg_months_per_job} avg months/job")
+            reasons.append(f"Strong technical signal: {scenario.tech_test_score}/100")
+            reasons.append("Multi-perspective risk-balanced evaluation required")
 
         else:  # MAINTENANCE
-            reasons.append("Steady-state operational improvement")
-            reasons.append("Low disruption to current operations")
-            reasons.append("Incremental enhancement focus")
+            reasons.append("Balanced candidate profile across all metrics")
+            reasons.append("Standard hire with moderate seniority and stability")
+            reasons.append("Equal-weight balanced evaluation recommended")
 
         return " | ".join(reasons)
 

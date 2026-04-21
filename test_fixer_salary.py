@@ -1,4 +1,6 @@
-from app.domain.agents.salary_agent import SalaryAgent
+import os
+
+content = '''from app.domain.agents.salary_agent import SalaryAgent
 from app.domain.models import AgentMessage, ScenarioInput
 
 def test_salary_supports_within_budget() -> None:
@@ -31,3 +33,7 @@ def test_salary_opposes_over_budget() -> None:
     result = agent.analyze(scenario)
     assert result.stance == "oppose"
     assert result.metrics["budget_fit"] < 5
+'''
+
+with open('tests/test_salary_agent.py', 'w', encoding='utf-8') as f:
+    f.write(content)

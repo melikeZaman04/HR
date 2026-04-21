@@ -11,6 +11,7 @@ class CreateScenarioRequest(BaseModel):
     avg_months_per_job: int = Field(ge=0)
     glassdoor_score: float = Field(ge=1.0, le=5.0)
     expected_salary: int = Field(gt=0)
+    salary_currency: str = Field(default="TRY", min_length=3, max_length=3, description="ISO 4217 currency code")
 
 
 class CreateScenarioResponse(BaseModel):
@@ -32,6 +33,7 @@ class ScenarioResponse(BaseModel):
     avg_months_per_job: int
     glassdoor_score: float
     expected_salary: int
+    salary_currency: str
     created_at: datetime
 
 
@@ -55,9 +57,8 @@ class SimulationDetailResponse(BaseModel):
     final_decision: str
 
 
-# Classification schemas
 class ClassificationRequest(BaseModel):
-    """Request to classify a scenario without saving it."""
+    """Request to classify a candidate profile without saving."""
     candidate_name: str = Field(min_length=1, max_length=120)
     applied_role: str = Field(min_length=1)
     experience_years: int = Field(ge=0)
@@ -65,17 +66,18 @@ class ClassificationRequest(BaseModel):
     avg_months_per_job: int = Field(ge=0)
     glassdoor_score: float = Field(ge=1.0, le=5.0)
     expected_salary: int = Field(gt=0)
+    salary_currency: str = Field(default="TRY", min_length=3, max_length=3)
 
 
 class AgentWeightsResponse(BaseModel):
-    """Recommended agent weights based on scenario type."""
-    CEO: float
-    CFO: float
-    HR: float
+    """Recommended agent weights based on candidate profile."""
+    Strategy: float
+    Salary: float
+    Culture: float
 
 
 class ClassificationResponse(BaseModel):
-    """Scenario classification result with ML-derived insights."""
+    """Candidate profile classification result (heuristic rule-based engine)."""
     primary_type: str = Field(description="Primary scenario classification")
     confidence: float = Field(ge=0.0, le=1.0, description="Classification confidence")
     secondary_type: str | None = Field(description="Secondary classification if applicable")

@@ -17,6 +17,7 @@ class ScenarioORM(Base):
     avg_months_per_job: Mapped[int] = mapped_column(Integer, nullable=False)
     glassdoor_score: Mapped[float] = mapped_column(Float, nullable=False)
     expected_salary: Mapped[int] = mapped_column(Integer, nullable=False)
+    salary_currency: Mapped[str] = mapped_column(String(3), nullable=False, default="TRY")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     agent_outputs = relationship("AgentOutputORM", back_populates="scenario", cascade="all, delete-orphan")

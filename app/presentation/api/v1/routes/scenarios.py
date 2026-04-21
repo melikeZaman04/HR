@@ -4,7 +4,7 @@ from app.application.exceptions import ScenarioNotFoundError, SimulationNotFound
 from app.application.use_cases.scenario_query_service import ScenarioQueryService
 from app.application.use_cases.scenario_service import ScenarioSimulationService
 from app.domain.models import AgentResult, ScenarioInput, ScenarioRecord
-from app.domain.services.classifier import ScenarioClassifier
+from app.domain.services.classifier import CandidateProfiler
 from app.presentation.dependencies import get_scenario_query_service, get_scenario_service
 from app.presentation.schemas.scenario import (
     AgentOutputResponse,
@@ -32,6 +32,7 @@ def _to_scenario_response(scenario: ScenarioRecord) -> ScenarioResponse:
         avg_months_per_job=scenario.avg_months_per_job,
         glassdoor_score=scenario.glassdoor_score,
         expected_salary=scenario.expected_salary,
+        salary_currency=scenario.salary_currency,
         created_at=scenario.created_at,
     )
 
@@ -102,6 +103,7 @@ async def create_scenario(
             avg_months_per_job=payload.avg_months_per_job,
             glassdoor_score=payload.glassdoor_score,
             expected_salary=payload.expected_salary,
+            salary_currency=payload.salary_currency,
         )
     )
     return CreateScenarioResponse(scenario_id=scenario_id)
@@ -126,7 +128,7 @@ async def run_simulation(
 
 
 # Classifier singleton for reuse
-_classifier = ScenarioClassifier()
+_classifier = CandidateProfiler()
 
 
 @router.post("/classify", response_model=ClassificationResponse)

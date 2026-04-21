@@ -1,4 +1,6 @@
-from app.domain.agents.strategy_agent import StrategyAgent
+import os
+
+content = '''from app.domain.agents.strategy_agent import StrategyAgent
 from app.domain.models import AgentMessage, ScenarioInput
 
 def test_strategy_scores_high_for_strong_tech_score() -> None:
@@ -17,7 +19,7 @@ def test_strategy_scores_high_for_strong_tech_score() -> None:
 
     assert isinstance(result, AgentMessage)
     assert result.stance == "support"
-    assert result.metrics["tech_alignment"] > 8
+    assert result.metrics["tech_score_fit"] > 8
 
 def test_strategy_opposes_low_tech_score() -> None:
     agent = StrategyAgent()
@@ -36,3 +38,7 @@ def test_strategy_opposes_low_tech_score() -> None:
     assert isinstance(result, AgentMessage)
     assert result.stance == "oppose"
     assert result.confidence > 0.5
+'''
+
+with open('tests/test_strategy_agent.py', 'w', encoding='utf-8') as f:
+    f.write(content)
