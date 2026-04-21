@@ -1,302 +1,304 @@
-# 🚀 AI Decision Ecosystem Engine
+# HireSync AI — Multi-Agent İşe Alım Karar Sistemi
 
-A highly advanced, **Multi-Agent Decision Support System** built with **FastAPI, PostgreSQL (Async), and Clean Architecture**. It orchestrates a simulation where three virtual agents (CEO, CFO, HR) evaluate business scenarios, debate over multiple rounds, and reach a consensus using a blend of deterministic rules and LLM reasoning.
+Üç uzman yapay zeka ajanının bir aday hakkında tartışarak konsensüs kararı verdiği, **FastAPI + PostgreSQL + Clean Architecture** tabanlı çok-ajanlı karar destek sistemi.
 
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
-![Python Version](https://img.shields.io/badge/python-3.11-blue)
+![Tests](https://img.shields.io/badge/tests-88%20passed-brightgreen)
+![Python](https://img.shields.io/badge/python-3.10-blue)
 ![Architecture](https://img.shields.io/badge/architecture-Clean-orange)
+![DB](https://img.shields.io/badge/database-PostgreSQL%2016-336791)
 
-## 📌 Features
-- **Multi-Agent Debate Protocol:** 3 specialized agents (CEO, CFO, HR) reading each other's inputs in a round-based negotiation.
-- **Hybrid AI Engine:** Deterministic rule-based scoring (for strict boundaries) backed by **Ollama (`qwen2.5:14b`)** for natural language reasoning and insight.
-- **Fully Asynchronous:** End-to-end `async/await` implementation via `asyncpg` and Async SQLAlchemy.
-- **LLM Call Logging:** Built-in performance tracking for LLM token latencies, model fallbacks, and success rates.
-- **Robust Testing:** 80+ Pytest cases executed in `<2s` ensuring flawless core logic.
+---
 
-## 🛠️ Technology Stack
-- **Backend:** FastAPI, Pydantic v2
-- **Database:** PostgreSQL, SQLAlchemy (Async), Alembic, `asyncpg`
-- **AI / LLM:** Ollama (Local LLM instance), LangChain
-- **DevOps:** Docker Compose, Pytest
-- **Upcoming (Sprint 3):** Scikit-Learn (ML Orchestrator), Streamlit (Frontend Dashboard)
+## Sistem Durumu (22 Nisan 2026)
 
-## 🚀 Quick Start (Local Setup)
+| Bileşen | Durum | Detay |
+|---------|-------|-------|
+| Docker App Container | Çalışıyor | `localhost:8000` |
+| Docker DB Container | Çalışıyor (healthy) | `localhost:5432` |
+| FastAPI / Swagger UI | Erişilebilir | `http://localhost:8000/docs` |
+| PostgreSQL Şeması | HireSync şeması aktif | Migration `0002` head'de |
+| Test Suite | 88/88 geçti | `pytest tests/ -v` |
+| Aktif Branch | `feature/agent-identities` | PR #1 açık |
 
-1. **Clone the repository and create a virtual environment:**
-   ```bash
-   git clone https://github.com/multi-agent-decision-engine/core-engine.git
-   cd core-engine
-   python -m venv .venv
-   # Windows: .venv\Scripts\activate | macOS/Linux: source .venv/bin/activate
-   ```
+---
 
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Nasıl Çalışır?
 
-3. **Environment Variables:**
-   Copy `.env.example` to `.env` (or configure via OS). 
-   *(Note: Alembic uses `postgresql+psycopg2` for migrations, while the app uses `postgresql+asyncpg` internally.)*
+Bir aday sisteme girildiğinde üç ajan sırasıyla analiz yapar ve birbirlerinin kararlarını okuyarak güven puanlarını güncellerler:
 
-4. **Start Database and Apply Migrations:**
-   ```bash
-   docker compose up -d db
-   alembic upgrade head
-   ```
-
-5. **Start API:**
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-
-*(Alternatively, you can just run `docker compose up --build` for a fully containerized startup).*
-
-## 🧪 Testing
-The core engine is covered by a robust test suite testing boundary conditions, agent behaviors, and schema validations.
-```bash
-pytest tests/ -v
+```
+Aday Verisi → [Strategy Agent] → [Salary Agent] → [Culture Agent]
+                    ↑                   ↑                 ↑
+               Teknik analiz      Bütçe analizi     Kültür analizi
+                    └───────────────────┴─────────────────┘
+                              DecisionAggregator
+                                     ↓
+                         MÜLAKATA AL / BEKLET / REDDET
 ```
 
-## Run with Docker
-1. Build and start services:
-   ```bash
-   docker compose up --build
-   ```
-2. Apply migrations inside the app container:
-   ```bash
-   docker compose exec app alembic upgrade head
-   ```
-3. Access API:
-   ```
-   http://localhost:8000/docs
-   ```
+---
 
-## One-command startup helpers
-- Linux/macOS:
-   ```bash
-   make start
-   ```
-- Windows (PowerShell):
-   ```powershell
-   .\start.ps1
-   ```
+## Ajan Kimlikleri
 
-## One-command stop helpers
-- Linux/macOS:
-   ```bash
-   make stop
-   ```
-- Windows (PowerShell):
-   ```powershell
-   .\stop.ps1
-   ```
+### Strategy Agent (CTO Zihniyeti)
+- **Sorumluluk:** Teknik yetkinlik ve deneyim derinliği
+- **Katman 1 (Matematik):** `tech_test_score` ve `experience_years` üzerinden `tech_alignment` ve `experience_depth` metriklerini üretir
+- **Katman 2 (LLM):** Ollama (`qwen2.5:7b`) ile teknik gerekçe yazar
+- **Stance Kuralları:**
+  - `tech_test_score < 50` → **oppose** (0.85 güven)
+  - `tech_test_score < 70` ve `experience_years > 5` → **oppose** (0.75 güven)
+  - `tech_test_score >= 80` ve `experience_years >= 3` → **support** (0.90 güven)
 
-## Demo & Submission
+### Salary Agent (CFO Zihniyeti)
+- **Sorumluluk:** Maaş beklentisini bütçe bandıyla karşılaştırır
+- **Katman 1 (Matematik):** Rol bazlı bütçe bandı ile `diff_ratio` hesaplar; `budget_fit` ve `market_alignment` üretir
+- **Bütçe Bandı:** Backend/Data: 80.000 TL baz + yıl başına 5.000 TL
+- **Stance Kuralları:**
+  - `diff_ratio > 1.2` (bütçeyi %20+ aşıyor) → **oppose** (0.90)
+  - `diff_ratio > 1.05` → **oppose** (0.60)
+  - Bunların dışı → **support** (0.80)
 
-**For a quick walkthrough:** See [`docs/demo.md`](docs/demo.md) for a 3-minute demo script with exact commands to create, simulate, and retrieve scenarios.
+### Culture Agent (HR Direktörü Zihniyeti)
+- **Sorumluluk:** İş değiştirme sıklığı ve kültürel uyum
+- **Katman 1 (Matematik):** `avg_months_per_job` → `churn_risk`, `glassdoor_score` → `cultural_fit`
+- **Stance Kuralları:**
+  - `churn_risk >= 8.0` (job hopper) → **oppose** (0.85)
+  - `churn_risk <= 3.0` ve `cultural_fit >= 7.0` → **support** (0.90)
 
-**For submission requirements:** See [`docs/submission.md`](docs/submission.md) for the complete checklist (environment, migrations, tests, CI, repo structure).
+### Çapraz Ajan Etkileşimi (Tur 2+)
+Her ajan, diğer ajanların kararını okuyarak kendi güven puanını güncelleyebilir:
+- Karşı ajan **oppose** verirse destekçi ajanın güveni düşer
+- Salary Agent, Strategy çok güçlü support verirse bütçe toleransını artırır
 
-## API Endpoints
-- `POST /api/v1/scenarios` - Create scenario
-- `POST /api/v1/scenarios/{id}/simulate` - Run simulation and persist outputs + final decision
-- `GET /api/v1/scenarios?limit=20&offset=0` - List scenarios (paginated)
-- `GET /api/v1/scenarios/{id}` - Get scenario details
-- `GET /api/v1/scenarios/{id}/simulation` - Get scenario with agent outputs and final decision
+---
 
-## Scenario Input Contract
+## Veritabanı Şeması
 
-All agents (CEO, CFO, HR) analyze the same standardized scenario input:
-
-```json
-{
-  "name": "Market Expansion Initiative",
-  "description": "Expand into Southeast Asia market",
-  "budget_million_usd": 5.0,
-  "expected_roi_percent": 45.0,
-  "risk_level": 6,
-  "team_readiness": 7
-}
+### `scenarios` tablosu
+```sql
+id              SERIAL PRIMARY KEY
+candidate_name  VARCHAR(120) NOT NULL
+applied_role    VARCHAR(120) NOT NULL
+experience_years INTEGER NOT NULL
+tech_test_score INTEGER NOT NULL        -- 0-100
+avg_months_per_job INTEGER NOT NULL     -- ay cinsinden
+glassdoor_score DOUBLE PRECISION NOT NULL -- 1.0-5.0
+expected_salary INTEGER NOT NULL        -- TL
+created_at      TIMESTAMP NOT NULL
 ```
 
-**Field Ranges & Meanings:**
-- `budget_million_usd` (float, > 0): Investment cost in millions
-- `expected_roi_percent` (float): Expected return % (positive or negative)
-- `risk_level` (int, 1–10): Project risk level (1=low, 10=high)
-- `team_readiness` (int, 1–10): Team capability (1=unready, 10=expert)
+### `agent_outputs` tablosu
+```sql
+id          SERIAL PRIMARY KEY
+scenario_id INTEGER REFERENCES scenarios(id) ON DELETE CASCADE
+agent_name  VARCHAR(30)  -- "Strategy" | "Salary" | "Culture"
+score       INTEGER      -- 0-100 (legacy aggregation skoru)
+rationale   TEXT
+```
 
-**Agent Scoring:**
-- **CEO**: Strategic fit (ROI) × Market confidence (1 - risk) → 0–100
-- **CFO**: Financial ROI × Risk penalty (1 - risk_factor) → 0–100
-- **HR**: Team readiness × Hiring load factor × Time factor → 0–100
+### `final_decisions` tablosu
+```sql
+id          SERIAL PRIMARY KEY
+scenario_id INTEGER REFERENCES scenarios(id) ON DELETE CASCADE UNIQUE
+final_score DOUBLE PRECISION
+decision    VARCHAR(20)  -- "APPROVE" | "REVISE" | "REJECT"
+```
 
-**Decision Thresholds:**
-- Average score ≥ 75: **APPROVE**
-- Average score 50–74: **REVISE**
-- Average score < 50: **REJECT**
+### Migration Geçmişi
+| Revizyon | Açıklama |
+|----------|----------|
+| `0001_initial_tables` | Eski CEO/CFO/HR finansal şema |
+| `0002_hireSync_candidate_schema` | HireSync aday şeması (aktif, head) |
 
-## Quick Start Demo
+---
 
-After starting the API (`http://localhost:8000`):
+## API Uç Noktaları
 
-### 1. Create a Scenario
+Tümü `http://localhost:8000/api/v1` altında:
+
+| Method | Endpoint | Açıklama |
+|--------|----------|----------|
+| `POST` | `/scenarios` | Yeni aday oluştur |
+| `POST` | `/scenarios/{id}/simulate` | 3 ajan simülasyonu çalıştır |
+| `GET` | `/scenarios` | Aday listesi (sayfalı) |
+| `GET` | `/scenarios/{id}` | Aday detayı |
+| `GET` | `/scenarios/{id}/simulation` | Ajan çıktıları + nihai karar |
+| `POST` | `/classify` | Aday profilini sınıflandır (ML) |
+| `GET` | `/scenarios/{id}/classify` | Kayıtlı adayı sınıflandır |
+
+### Aday Oluşturma
+
 ```bash
 curl -X POST http://localhost:8000/api/v1/scenarios \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Market Expansion",
-    "description": "Southeast Asia entry",
-    "budget_million_usd": 5.0,
-    "expected_roi_percent": 45.0,
-    "risk_level": 6,
-    "team_readiness": 7
+    "candidate_name": "Ahmet Yılmaz",
+    "applied_role": "Backend Developer",
+    "experience_years": 5,
+    "tech_test_score": 85,
+    "avg_months_per_job": 18,
+    "glassdoor_score": 4.2,
+    "expected_salary": 90000
   }'
-# Returns: {"scenario_id": 1}
 ```
 
-### 2. Run Simulation
+### Simülasyon Çalıştırma
+
 ```bash
 curl -X POST http://localhost:8000/api/v1/scenarios/1/simulate
-# Returns agent scores (CEO, CFO, HR) + final decision (APPROVE/REVISE/REJECT)
 ```
 
-### 3. Retrieve Results
+Örnek çıktı:
+```json
+{
+  "scenario_id": 1,
+  "agent_outputs": [
+    {"agent_name": "Strategy", "score": 85, "rationale": "Strong technical profile..."},
+    {"agent_name": "Salary",   "score": 72, "rationale": "Salary within budget band..."},
+    {"agent_name": "Culture",  "score": 60, "rationale": "Moderate churn risk..."}
+  ],
+  "final_score": 72.33,
+  "final_decision": "REVISE"
+}
+```
+
+### Karar Eşikleri
+| Skor | Karar |
+|------|-------|
+| ≥ 75 | **APPROVE** — Mülakata Al |
+| 50–74 | **REVISE** — Beklet |
+| < 50 | **REJECT** — Reddet |
+
+---
+
+## ML Sınıflandırıcı
+
+Her aday simülasyon öncesinde otomatik olarak 5 profile sınıflandırılır ve ajan ağırlıkları dinamik olarak ayarlanır:
+
+| Profil Tipi | Tetikleyici | Strategy | Salary | Culture |
+|-------------|-------------|----------|--------|---------|
+| `high_growth` | Yüksek teknik + derin deneyim | **%40** | %35 | %25 |
+| `cost_optimization` | Bütçe dostu maaş beklentisi | %25 | **%50** | %25 |
+| `team_expansion` | Junior profil, iyi kültür uyumu | %25 | %25 | **%50** |
+| `strategic_pivot` | Güçlü teknik ama job hopper | **%45** | %30 | %25 |
+| `maintenance` | Dengeli, orta profil | %33 | %34 | %33 |
+
+---
+
+## Proje Mimarisi (Clean Architecture)
+
+```
+app/
+├── domain/                    # İş kuralları — dış bağımlılık yok
+│   ├── agents/
+│   │   ├── base.py            # Agent soyut sınıfı
+│   │   ├── strategy_agent.py  # CTO ajanı
+│   │   ├── salary_agent.py    # CFO ajanı
+│   │   ├── culture_agent.py   # HR ajanı
+│   │   └── factory.py         # Agent listesi üretici
+│   ├── models.py              # ScenarioInput, AgentMessage, FinalDecision
+│   ├── repositories.py        # Repository interface'leri
+│   └── services/
+│       ├── aggregator.py      # Ajan kararlarını birleştirir
+│       └── classifier.py      # ML profil sınıflandırıcısı
+│
+├── application/               # Orkestrasyon katmanı
+│   └── use_cases/
+│       ├── scenario_service.py      # Simülasyon çalıştırır
+│       └── scenario_query_service.py # Sorgular
+│
+├── infrastructure/            # DB, ORM, LLM bağlantıları
+│   ├── database/
+│   │   ├── models.py          # SQLAlchemy ORM modelleri
+│   │   └── session.py         # asyncpg oturumu
+│   ├── repositories/          # Repository implementasyonları
+│   ├── llm.py                 # Ollama çağrısı
+│   └── config.py              # .env ayarları
+│
+└── presentation/              # FastAPI katmanı
+    ├── api/v1/routes/
+    │   └── scenarios.py       # Tüm HTTP endpoint'leri
+    └── schemas/
+        └── scenario.py        # Pydantic request/response şemaları
+```
+
+---
+
+## Kurulum ve Çalıştırma
+
+### Gereksinimler
+- Docker Desktop
+- Python 3.10+ (test için)
+- Conda ortamı: `sivecore`
+
+### Docker ile Başlatma
+
 ```bash
-# Get all scenarios
-curl http://localhost:8000/api/v1/scenarios?limit=10
+# Tüm servisleri başlat
+docker compose up -d
 
-# Get scenario details
-curl http://localhost:8000/api/v1/scenarios/1
+# Migration'ı uygula (yeni kurulumda)
+docker compose exec app python -m alembic upgrade head
 
-# Get full simulation with agent outputs
-curl http://localhost:8000/api/v1/scenarios/1/simulation
+# API erişimi
+http://localhost:8000/docs
 ```
 
-### Python Example
-```python
-import requests
+### Mevcut Container'lar Duruyorsa
 
-base_url = "http://localhost:8000/api/v1"
-
-# Create scenario
-scenario_response = requests.post(
-    f"{base_url}/scenarios",
-    json={
-        "name": "Product Launch",
-        "description": "New product launch Q2",
-        "budget_million_usd": 2.5,
-        "expected_roi_percent": 30.0,
-        "risk_level": 4,
-        "team_readiness": 8,
-    }
-)
-scenario_id = scenario_response.json()["scenario_id"]
-
-# Run simulation
-simulation = requests.post(f"{base_url}/scenarios/{scenario_id}/simulate").json()
-print(f"Decision: {simulation['final_decision']} (score: {simulation['final_score']})")
-
-# Retrieve results
-results = requests.get(f"{base_url}/scenarios/{scenario_id}/simulation").json()
-for output in results["agent_outputs"]:
-    print(f"{output['agent_name']}: {output['score']} - {output['rationale']}")
+```bash
+docker start ai_decision_db ai_decision_app
 ```
 
-## Architecture & Patterns
+### Test Çalıştırma
 
-### Clean Architecture (Layered)
-
-This project implements **Clean Architecture** with strict dependency rules to ensure maintainability, testability, and separation of concerns.
-
-```mermaid
-graph TD
-    A[Presentation Layer<br/>FastAPI Routes] --> B[Application Layer<br/>Use Cases]
-    B --> C[Domain Layer<br/>Entities, Agents, Rules]
-    B --> D[Infrastructure Layer<br/>DB, ORM, Repositories]
-    D -.implements.-> C
-    
-    style C fill:#90EE90
-    style D fill:#FFB6C1
-    style B fill:#87CEEB
-    style A fill:#FFD700
+```bash
+conda activate sivecore
+pytest tests/ -v
+# Beklenen çıktı: 88 passed
 ```
 
-### Layer Responsibilities
+---
 
-| Layer | Responsibility | Dependencies |
-|-------|---------------|--------------|
-| **Domain** | Business entities, agent logic, interfaces | None (pure domain) |
-| **Application** | Use cases, orchestration | Domain only |
-| **Infrastructure** | Database, ORM, repositories | Domain (implements interfaces) |
-| **Presentation** | API routes, request/response schemas | Application + Domain |
-
-**Key Rules:**
-- Domain has **no external dependencies**
-- Infrastructure implements domain repository interfaces
-- Application orchestrates domain + infrastructure
-- Presentation remains thin (no business logic)
-
-### Design Patterns
-
-| Pattern | Usage | Location |
-|---------|-------|----------|
-| **Repository Pattern** | All database operations abstracted | `domain/repositories.py` (contracts)<br/>`infrastructure/repositories/` (implementations) |
-| **Factory Pattern** | Agent instantiation | `domain/agents/factory.py` |
-| **Dependency Injection** | Service/repository wiring | `presentation/dependencies.py` |
-| **Strategy Pattern** | Agent analysis interface | `domain/agents/base.py` (Agent ABC) |
-
-### Testing Strategy
-
-- **Unit Tests**: Domain logic (agents, aggregator, services with mocked repositories)
-- **Integration Tests**: API endpoints with dependency overrides (FastAPI TestClient)
-- **Coverage**: CFO/HR scoring rules, decision aggregation, pagination, 404 cases
-
-**CI**: GitHub Actions runs `pytest` on every pull request.
-
-### Data Flow Example
+## Git Akışı
 
 ```
-POST /api/v1/scenarios/{id}/simulate
-  ↓
-Route Handler (presentation)
-  ↓
-ScenarioSimulationService (application)
-  ↓
-AgentFactory.create_default_agents() (domain)
-  → CEO/CFO/HR agents analyze scenario
-  ↓
-DecisionAggregator (domain)
-  ↓
-Repository.create() (infrastructure → PostgreSQL via ORM)
-  ↓
-SimulationResponse (presentation)
+main  ←  feature/agent-identities (PR #1 — açık)
+         feature/question-agent   (sonraki hedef)
+         feature/api-integration  (frontend bağlantısı)
 ```
 
-## Project Management (Kanban)
+### Tamamlanan PR'lar
+| PR | Branch | Konu |
+|----|--------|------|
+| #1 | `feature/agent-identities` | Agent kimlikleri + 8 kritik bug düzeltmesi |
 
-This project was managed using **Jira Kanban** with a structured workflow and code review process. For detailed documentation, see [`docs/workflow.md`](docs/workflow.md).
+### Sonraki Adımlar
+| Branch | Hedef |
+|--------|-------|
+| `feature/question-agent` | 3 ajanın çıktısını okuyup 8-10 Türkçe mülakat sorusu üreten `question_agent.py` |
+| `feature/api-integration` | Next.js frontend dashboard bağlantısı |
 
-### Task → Branch → PR → Review Cycle
+---
 
-1. **Task Created** in Jira (e.g., `JIRA-42`)
-2. **Branch Created** from main: `feature/JIRA-42-short-description`
-3. **Development** locally or on branch
-4. **Push & Create Pull Request** with reference to Jira task
-5. **Code Review**: Verify clean architecture, tests pass, no raw SQL
-6. **Approval & Merge** to main
-7. **CI Pipeline**: GitHub Actions runs full test suite
+## Çevre Değişkenleri (`.env`)
 
-**Workflow Stages**:
+```env
+DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/ai_decision_engine
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_TIMEOUT=30
+DEBUG=false
+LOG_LEVEL=INFO
 ```
-📋 To Do → 🔨 In Progress → 👀 Code Review → ✅ Done
-```
 
-**Branch Naming**: `feature/JIRA-XX-short-description`
+> **Not:** Uygulama runtime'da `asyncpg` driver'ı kullanır (`postgresql+asyncpg://...`). Alembic migration'ları için `psycopg2` kullanılır. Config otomatik dönüştürür.
 
-**PR Requirements**:
-- Linked Jira task in description
-- All CI checks passing
-- At least 1 code review approval
-- No architecture violations (clean layers maintained)
+---
+
+## Teknik Notlar
+
+- **LLM Fallback:** Ollama erişilemezse ajan deterministik metrik özeti döner, sistem çalışmaya devam eder.
+- **Tur Limiti:** Simülasyon varsayılan 2 tur çalışır; konsensüs veya stabilite durumunda erken durur.
+- **Agent Sırası:** Strategy → Salary → Culture (her ajan öncekinin çıktısını görür).
+- **asyncio_mode:** `pytest.ini` içinde `auto` olarak ayarlanmış, `pytest-asyncio` gerektirir.
