@@ -93,6 +93,22 @@ class StrategyAgent(Agent):
                     confidence -= 0.10
                     reasoning_notes.append("Salary expectation is too high. Strategy confidence reduced.")
 
+            # Stance flip: if both other agents strongly oppose, shift to neutral
+            culture_strongly_opposes = (
+                culture_stance_info is not None
+                and culture_stance_info[0] == "oppose"
+                and culture_stance_info[1] >= 0.70
+            )
+            salary_strongly_opposes = (
+                salary_stance_info is not None
+                and salary_stance_info[0] == "oppose"
+                and salary_stance_info[1] >= 0.70
+            )
+            if stance == "support" and culture_strongly_opposes and salary_strongly_opposes:
+                stance = "neutral"
+                confidence = max(0.40, confidence - 0.10)
+                reasoning_notes.append("Revised to neutral: strong consensus opposition from Culture and Salary agents.")
+
         confidence = max(0.3, min(1.0, confidence))
         
         # 5. Reasoning Generation (Katman 2: LLM reasoning)

@@ -35,7 +35,8 @@ class ScenarioInput:
       - glassdoor_score: Adayın eski şirketinin ortalama kültürel skoru (float, 1.0 - 5.0)
     
     Salary Agent:
-      - expected_salary: Adayın maaş beklentisi (TL) (int)
+      - expected_salary: Adayın maaş beklentisi (int)
+      - salary_currency: ISO 4217 para birimi kodu (str, varsayılan: "TRY")
     """
     candidate_name: str
     applied_role: str
@@ -44,6 +45,7 @@ class ScenarioInput:
     avg_months_per_job: int
     glassdoor_score: float
     expected_salary: int
+    salary_currency: str = "TRY"
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,7 @@ class ScenarioRecord:
     avg_months_per_job: int
     glassdoor_score: float
     expected_salary: int
+    salary_currency: str
     created_at: datetime
 
 

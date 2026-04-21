@@ -18,6 +18,7 @@ def _scenario_record() -> ScenarioRecord:
         avg_months_per_job=18,
         glassdoor_score=4.2,
         expected_salary=90000,
+        salary_currency="TRY",
         created_at=datetime(2026, 2, 26, 10, 0, 0),
     )
 

@@ -8,7 +8,7 @@ from app.domain.agents.factory import AgentFactory
 from app.domain.models import AgentMessage, ScenarioInput
 from app.domain.repositories import AgentOutputRepository, FinalDecisionRepository, ScenarioRepository
 from app.domain.services.aggregator import DecisionAggregator
-from app.domain.services.classifier import ClassificationResult, ScenarioClassifier
+from app.domain.services.classifier import CandidateProfiler, ClassificationResult
 
 
 logger = logging.getLogger(__name__)
@@ -55,13 +55,13 @@ class ScenarioSimulationService:
         agent_output_repository: AgentOutputRepository,
         final_decision_repository: FinalDecisionRepository,
         aggregator: DecisionAggregator | None = None,
-        classifier: ScenarioClassifier | None = None,
+        classifier: CandidateProfiler | None = None,
     ) -> None:
         self.scenario_repository = scenario_repository
         self.agent_output_repository = agent_output_repository
         self.final_decision_repository = final_decision_repository
         self.aggregator = aggregator or DecisionAggregator()
-        self.classifier = classifier or ScenarioClassifier()
+        self.classifier = classifier or CandidateProfiler()
 
     async def create_scenario(self, scenario: ScenarioInput) -> int:
         """Create a new scenario and return its ID."""
@@ -104,6 +104,7 @@ class ScenarioSimulationService:
             avg_months_per_job=scenario.avg_months_per_job,
             glassdoor_score=scenario.glassdoor_score,
             expected_salary=scenario.expected_salary,
+            salary_currency=scenario.salary_currency,
         )
 
         classification: ClassificationResult | None = None
