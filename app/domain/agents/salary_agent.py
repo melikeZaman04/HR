@@ -1,110 +1,79 @@
 from app.domain.agents.base import Agent
 from app.domain.models import AgentMessage, ScenarioInput, Stance, get_agent_metrics, get_agent_stance
+from app.infrastructure.llm import call_llm
 
-def _to_financial_inputs(scenario: ScenarioInput) -> dict:
+class SalaryAgent(Agent):
     """
-    Convert ScenarioInput to standardized financial inputs format.
+    Salary & Budget Calibration Expert (CFO Mindset)
     
-    Args:
-        scenario: Input scenario data
-        
-    Returns:
-        Dict with investment_cost, expected_profit, risk_factor, budget_tier
-    """
-    budget = scenario.budget_million_usd
-    
-    if budget < 2:
-        budget_tier = "small"
-    elif budget <= 10:
-        budget_tier = "medium"
-    else:
-        budget_tier = "large"
-        
-    return {
-        "investment_cost": budget,
-        "expected_profit": budget * (1 + scenario.expected_roi_percent / 100),
-        "risk_factor": scenario.risk_level / 10.0,
-        "budget_tier": budget_tier
-    }
-
-class CFOAgent(Agent):
-    """
-    CFO Agent: Financial analysis focusing on cost, risk, and budget.
-    
+    Evaluates the candidate's salary expectations against typical market budget bands.
     Metrics produced:
-        - risk_score (0-10): Financial risk assessment
-        - cost_impact (float): Investment cost in millions USD
-        - roi_estimate (float): Expected return on investment percentage
+        - budget_fit (0-10): How well the expectation fits the company budget
+        - market_alignment (0-10): How realistic the expectation is for their experience
     """
     
-    def _build_reasoning_prompt(self, scenario_inputs: ScenarioInput) -> str:
-        """
-        CFO ajanı için finansal sürdürülebilirlik ve risk odaklı analiz cümlesi oluşturur.
-        Bu şimdilik reasoning alanında loglanır, ileride bir LLM promptunda kullanılacak.
-        """
-        return f"[CFO Metni]: Finansal sürdürülebilirlik ve risk odaklı analiz. (Bütçe: ${scenario_inputs.budget_million_usd}M)"
+    def _build_system_prompt(self) -> str:
+        return (
+            "You are a highly rational, budget-conscious CFO or Finance Director. "
+            "You evaluate candidates solely on their financial expectations (expected_salary) "
+            "comparative to their experience_years and applied_role. "
+            "You MUST respond in English only."
+        )
+
+    def _build_reasoning_prompt(self, scenario_inputs: ScenarioInput, stance: str, confidence: float) -> str:
+        return (
+            f"Candidate: {scenario_inputs.candidate_name}\n"
+            f"Role: {scenario_inputs.applied_role}\n"
+            f"Experience: {scenario_inputs.experience_years} years\n"
+            f"Expected Salary: {scenario_inputs.expected_salary} TL\n\n"
+            f"Based on your mathematical rules, your stance is '{stance}' with {confidence*100}% confidence.\n"
+            "Explain this decision in 2-3 short, finance-focused sentences about budget sustainability and ROI. "
+            "Do not change the stance, just justify it."
+        )
+
+    def _call_llm(self, system_prompt: str, user_prompt: str, scenario_name: str) -> str:
+        try:
+            full_prompt = f"{system_prompt}\n\n{user_prompt}"
+            return call_llm(full_prompt, agent_name="Salary", scenario_name=scenario_name)
+        except Exception as e:
+            return f"[Salary Fallback] Connection to LLM failed. Reason: {str(e)}"
 
     def analyze(
         self,
         scenario_inputs: ScenarioInput,
         previous_messages: list[AgentMessage] | None = None,
     ) -> AgentMessage:
-        """
-        Perform financial analysis of the scenario.
         
-        Args:
-            scenario_inputs: Scenario data to analyze
-            previous_messages: Optional messages from previous rounds
+        # 1. Base Metrics Calculation (Katman 1: Matematik)
+        # Basit bir piyasa verisi simülasyonu
+        base_budget = 50000
+        if "backend" in scenario_inputs.applied_role.lower() or "data" in scenario_inputs.applied_role.lower():
+            base_budget = 80000
+        elif "frontend" in scenario_inputs.applied_role.lower() or "mobile" in scenario_inputs.applied_role.lower():
+            base_budget = 70000
             
-        Returns:
-            AgentMessage with CFO's financial assessment
-        """
-        financial_inputs = _to_financial_inputs(scenario_inputs)
+        allowed_max = base_budget + (scenario_inputs.experience_years * 5000)
         
-        investment_cost = financial_inputs["investment_cost"]
-        expected_profit = financial_inputs["expected_profit"]
-        risk_factor = financial_inputs["risk_factor"]
-        budget_tier = financial_inputs["budget_tier"]
+        # Calculate how much expected salary deviates from allowed max
+        diff_ratio = scenario_inputs.expected_salary / allowed_max
         
-        # Calculate ROI
-        if investment_cost <= 0:
-            roi = 0.0
-        else:
-            roi = (expected_profit - investment_cost) / investment_cost
-            
-        risk_penalty = 1.0 - risk_factor
-        adjusted_roi = roi * risk_penalty
-        
-        # 1. Dynamic Thresholds by Budget Tier
-        if budget_tier == "large":
-            support_threshold = 0.35
-            neutral_threshold = 0.15
-            risk_ceiling = 0.7
-        elif budget_tier == "medium":
-            support_threshold = 0.30
-            neutral_threshold = 0.10
-            risk_ceiling = 0.8
-        else: # small
-            support_threshold = 0.20
-            neutral_threshold = 0.05
-            risk_ceiling = 0.9
-            
+        budget_fit = min(10.0, max(0.0, 10.0 - ((diff_ratio - 1.0) * 20.0)))
+        market_alignment = min(10.0, max(0.0, 10.0 - abs(1.0 - diff_ratio) * 10.0))
+
         # 2. Base Stance Logic
-        if adjusted_roi >= support_threshold:
-            stance = "support"
-            confidence = min(1.0, 0.5 + adjusted_roi * 0.5)
-        elif adjusted_roi >= neutral_threshold:
-            stance = "neutral"
-            confidence = 0.5 + abs(adjusted_roi - neutral_threshold * 2) * 0.5
-        else:
+        if diff_ratio > 1.2:  # Expected is >20% over budget limits
             stance = "oppose"
-            confidence = min(1.0, 0.5 + (neutral_threshold - adjusted_roi) * 2)
-            
-        # High risk checks
-        if risk_factor >= risk_ceiling and stance == "support":
+            confidence = 0.90
+        elif diff_ratio > 1.05:  # Expected is slightly over
+            stance = "oppose"
+            confidence = 0.60
+        elif diff_ratio < 0.8:  # Suspiciously low
             stance = "neutral"
-            confidence = 0.6
-            
+            confidence = 0.60
+        else: # Within reasonable budget (0.8 - 1.05)
+            stance = "support"
+            confidence = 0.80
+
         # 3. Round Tracking
         current_round = 1
         if previous_messages:
@@ -114,91 +83,53 @@ class CFOAgent(Agent):
         
         # 4. Cross-Metric Analysis
         if current_round > 1 and previous_messages:
-            # Analyze HR
-            hr_metrics = get_agent_metrics(previous_messages, "HR")
-            if hr_metrics:
-                talent_availability = hr_metrics.get("talent_availability", 5)
-                team_impact = hr_metrics.get("team_impact", 5)
-                workload_score = hr_metrics.get("workload_score", 5)
-                
-                if talent_availability < 4:
-                    penalty = (4 - talent_availability) * 0.03
-                    confidence -= penalty
-                    reasoning_notes.append(f"İK yetenek sıkıntısı raporladı, maliyet riski arttı (-{penalty:.2f}).")
-                
-                if team_impact < 3:
-                     confidence -= 0.08
-                     reasoning_notes.append("İK'nın olumsuz ekip etkisi öngörüsü verimliliği düşürebilir.")
-                     
-                if workload_score < 4:
-                    confidence -= 0.06
-                    reasoning_notes.append("Yüksek iş yükü (turnover riski) maliyet projeksiyonunu bozabilir.")
-
-            # Analyze CEO
-            ceo_metrics = get_agent_metrics(previous_messages, "CEO")
-            if ceo_metrics:
-                growth_potential = ceo_metrics.get("growth_potential", 0)
-                market_alignment = ceo_metrics.get("market_alignment", 0)
-                
-                if growth_potential >= 8 and market_alignment >= 7:
-                    confidence += 0.05
-                    reasoning_notes.append("CEO'nun güçlü büyüme öngörüsü finansal risk toleransını artırdı.")
-                
-                if market_alignment < 4:
-                    confidence -= 0.07
-                    reasoning_notes.append("CEO'nun pazar uyumsuzluğu tespiti gelir tahminlerini şüpheli kılıyor.")
+            strategy_stance_info = get_agent_stance(previous_messages, "Strategy")
+            culture_stance_info = get_agent_stance(previous_messages, "Culture")
             
-            # Stance Shift Logic
-            ceo_stance_info = get_agent_stance(previous_messages, "CEO")
-            hr_stance_info = get_agent_stance(previous_messages, "HR")
-            
-            if ceo_stance_info and hr_stance_info:
-                ceo_s, ceo_conf = ceo_stance_info
-                hr_s, _ = hr_stance_info
-                
-                if stance == "oppose" and ceo_s == "support" and hr_s == "support":
-                    if adjusted_roi > 0:
-                        stance = "neutral"
-                        confidence = 0.45
-                        reasoning_notes.append("Diğer birimlerin tam desteği ve pozitif ROI nedeniyle itiraz NÖTR'e çekildi.")
-                elif stance == "support" and ceo_s == "oppose" and hr_s == "oppose":
+            if strategy_stance_info:
+                strat_s, strat_conf = strategy_stance_info
+                # Eğer aday bütçeyi aşıyorsa ama teknik olarak MÜKEMMEL ise tölere et
+                if strat_s == "support" and strat_conf > 0.8 and stance == "oppose" and diff_ratio <= 1.2:
                     stance = "neutral"
-                    confidence = 0.5
-                    reasoning_notes.append("Diğer birimlerin ortak itirazı finansal desteği askıya aldırdı.")
-                elif stance == "neutral" and ceo_s == "support" and ceo_conf >= 0.8:
-                    confidence = min(0.65, confidence + 0.1)
-                    reasoning_notes.append("CEO'nun çok güçlü desteği belirsizliği azalttı.")
+                    confidence = 0.60
+                    reasoning_notes.append("Strategy Agent strongly supports the candidate; willing to flex the budget to neutral.")
+                    
+            if culture_stance_info:
+                cult_s, _ = culture_stance_info
+                # Eğer adayın bütçesi uygun olsa bile erken kaçma ihtimali varsa yatırımı (maaşı) riskli bul
+                if cult_s == "oppose" and stance == "support":
+                    confidence -= 0.20
+                    reasoning_notes.append("Culture Agent highlighted churn risk; reducing financial commitment confidence.")
 
-        # Ensure confidence bounds
         confidence = max(0.3, min(1.0, confidence))
         
-        # JIRA-02: Build reasoning prompt content
-        llm_persona_text = self._build_reasoning_prompt(scenario_inputs)
+        # 5. Reasoning Generation (Katman 2)
+        system_p = self._build_system_prompt()
+        user_p = self._build_reasoning_prompt(scenario_inputs, stance, confidence)
         
-        # 5. Reasoning Generation
-        risk_score = round(risk_factor * 10, 1)
-        roi_estimate = round(roi * 100, 2)
-        
-        base_reasoning = (
-            f"{llm_persona_text} | "
-            f"Bütçe {budget_tier} (${investment_cost}M), beklenen ROI %{roi_estimate}. "
-            f"Risk skoru: {risk_score}/10. Risk ayarlı ROI: {adjusted_roi:.2f}."
+        fallback_reasoning = (
+            f"Budget fit {budget_fit:.1f}/10 and market alignment {market_alignment:.1f}/10. "
+            f"Expected {scenario_inputs.expected_salary} vs Max Limit {allowed_max}. "
         )
-        
         if reasoning_notes:
-            final_reasoning = f"{base_reasoning} Çapraz analiz: {' '.join(reasoning_notes)} Sonuç: {stance} (%{int(confidence*100)})."
+            fallback_reasoning += "Cross analysis: " + " ".join(reasoning_notes) + " "
+        fallback_reasoning += f"Result: {stance} ({int(confidence*100)}%)."
+        
+        llm_reasoning = self._call_llm(system_p, user_p, scenario_inputs.candidate_name)
+        
+        if "[Salary Fallback]" in llm_reasoning:
+            final_reasoning = fallback_reasoning + " | " + llm_reasoning
         else:
-            final_reasoning = f"{base_reasoning} Sonuç: {stance} (%{int(confidence*100)})."
+            final_reasoning = llm_reasoning
 
         return AgentMessage(
-            agent="CFO",
+            agent="Salary",
             stance=stance,
             confidence=round(confidence, 2),
             reasoning=final_reasoning,
             metrics={
-                "risk_score": risk_score,
-                "cost_impact": round(investment_cost, 2),
-                "roi_estimate": roi_estimate,
+                "budget_fit": round(budget_fit, 1),
+                "market_alignment": round(market_alignment, 1)
             },
             round_number=current_round
         )

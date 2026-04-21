@@ -1,232 +1,131 @@
 from app.domain.agents.base import Agent
 from app.domain.models import AgentMessage, ScenarioInput, Stance, get_agent_metrics, get_agent_stance
+from app.infrastructure.llm import call_llm
 
-def _to_hr_inputs(scenario: ScenarioInput) -> dict:
+class CultureAgent(Agent):
     """
-    Convert ScenarioInput to standardized HR inputs format.
+    Culture & Loyalty Expert (HR Director Mindset)
     
-    Args:
-        scenario: Input scenario data
-        
-    Returns:
-        Dict with hiring_needed, time_to_hire_months, training_months, team_readiness
-    """
-    # Hiring needed based on budget and risk (proxy for complexity)
-    budget_factor = scenario.budget_million_usd / 5.0
-    risk_factor = scenario.risk_level / 5.0
-    hiring_needed = int(budget_factor + risk_factor)
-    
-    # Dynamic time estimates based on hiring volume
-    if hiring_needed <= 2:
-        time_to_hire = 1.5
-        training = 1.0
-    elif hiring_needed <= 5:
-        time_to_hire = 2.5
-        training = 1.5
-    else:
-        time_to_hire = 3.5
-        training = 2.0
-        
-    # High readiness reduces training time
-    if scenario.team_readiness >= 8:
-        training = max(0.5, training - 0.5)
-        
-    return {
-        "hiring_needed": max(0, hiring_needed),
-        "time_to_hire_months": time_to_hire,
-        "training_months": training,
-        "team_readiness": scenario.team_readiness,
-    }
-
-class HRAgent(Agent):
-    """
-    HR Agent: Human resources impact evaluation.
-    
-    Focuses on personnel, competency, and workload considerations.
-    
+    Evaluates the candidate's job switching frequency and cultural fit.
     Metrics produced:
-        - talent_availability (0-10): Available talent/hiring feasibility
-        - team_impact (0-10): Impact on existing team
-        - workload_score (0-10): Workload sustainability assessment
+        - churn_risk (0-10): Risk of leaving the company early
+        - cultural_fit (0-10): Fit with company values based on Glassdoor
     """
     
-    def _build_reasoning_prompt(self, scenario_inputs: ScenarioInput) -> str:
-        """
-        HR ajanı için ekip kapasitesi ve iş yükü odaklı analiz cümlesi oluşturur.
-        Bu şimdilik reasoning alanında loglanır, ileride bir LLM promptunda kullanılacak.
-        """
-        return f"[HR Metni]: Ekip kapasitesi ve iş yükü odaklı analiz. (Hazır Bulunuşluk: {scenario_inputs.team_readiness}/10)"
+    def _build_system_prompt(self) -> str:
+        return (
+            "You are a human-centric HR Director who values company culture and employee retention. "
+            "You evaluate candidates strictly based on their job-hopping tendency (avg_months_per_job) "
+            "and their previous company's culture score (glassdoor_score). "
+            "You MUST respond in English only."
+        )
+
+    def _build_reasoning_prompt(self, scenario_inputs: ScenarioInput, stance: str, confidence: float) -> str:
+        return (
+            f"Candidate: {scenario_inputs.candidate_name}\n"
+            f"Average Months Per Job: {scenario_inputs.avg_months_per_job} months\n"
+            f"Previous Company Glassdoor: {scenario_inputs.glassdoor_score}/5.0\n\n"
+            f"Based on your mathematical rules, your stance is '{stance}' with {confidence*100}% confidence.\n"
+            "Explain this decision in 2-3 short, HR-focused sentences about churn risk and cultural alignment. "
+            "Do not change the stance, just justify it."
+        )
+
+    def _call_llm(self, system_prompt: str, user_prompt: str, scenario_name: str) -> str:
+        try:
+            full_prompt = f"{system_prompt}\n\n{user_prompt}"
+            return call_llm(full_prompt, agent_name="Culture", scenario_name=scenario_name)
+        except Exception as e:
+            return f"[Culture Fallback] Connection to LLM failed. Reason: {str(e)}"
 
     def analyze(
         self,
         scenario_inputs: ScenarioInput,
         previous_messages: list[AgentMessage] | None = None,
     ) -> AgentMessage:
-        """
-        Perform HR impact analysis of the scenario.
         
-        Args:
-            scenario_inputs: Scenario data to analyze
-            previous_messages: Optional messages from previous rounds
+        # 1. Base Metrics Calculation (Katman 1: Matematik)
+        # Churn risk: lower months = higher risk
+        if scenario_inputs.avg_months_per_job < 6:
+            churn_risk = 9.5
+        elif scenario_inputs.avg_months_per_job < 12:
+            churn_risk = 8.0
+        elif scenario_inputs.avg_months_per_job < 24:
+            churn_risk = 5.0
+        else:
+            churn_risk = 2.0
             
-        Returns:
-            AgentMessage with HR's assessment
-        """
-        hr_inputs = _to_hr_inputs(scenario_inputs)
+        # Cultural fit based on glassdoor (assumes passing a high culture company means good traits)
+        cultural_fit = min(10.0, max(0.0, scenario_inputs.glassdoor_score * 2.0))
         
-        team_readiness = hr_inputs["team_readiness"]
-        hiring_needed = hr_inputs["hiring_needed"]
-        time_to_hire_months = hr_inputs["time_to_hire_months"]
-        training_months = hr_inputs["training_months"]
-        
-        # 1. Base Metrics Calculation
-        total_readiness_months = time_to_hire_months + training_months
-        
-        # Talent availability: scales with hiring volume (inverse)
-        talent_availability = max(0, 10 - hiring_needed * 0.8)
-        
-        # Team impact: readiness mitigated by disruption of hiring
-        team_impact = team_readiness * (1 - hiring_needed / 15.0)
-        
-        # Workload score: inverse of time to productivity
-        workload_score = max(0, 10 - total_readiness_months * 1.5)
-        
-        # 2. Round Tracking
+        # 2. Base Stance Logic
+        if churn_risk >= 8.0: # Job hopper
+            stance = "oppose"
+            confidence = 0.85
+        elif churn_risk >= 5.0 and cultural_fit < 6.0:
+            stance = "oppose"
+            confidence = 0.60
+        elif churn_risk <= 3.0 and cultural_fit >= 7.0:
+            stance = "support"
+            confidence = 0.90
+        elif churn_risk <= 6.0:
+            stance = "support"
+            confidence = 0.60
+        else:
+            stance = "neutral"
+            confidence = 0.50
+            
+        # 3. Round Tracking
         current_round = 1
         if previous_messages:
             current_round = max(m.round_number for m in previous_messages) + 1
             
         reasoning_notes = []
         
-        # 3. Cross-Metric Analysis
+        # 4. Cross-Metric Analysis
         if current_round > 1 and previous_messages:
-            # Analyze CFO
-            cfo_metrics = get_agent_metrics(previous_messages, "CFO")
-            if cfo_metrics:
-                cfo_risk = cfo_metrics.get("risk_score", 0)
-                cfo_roi = cfo_metrics.get("roi_estimate", 0)
-                
-                if cfo_risk > 7:
-                    talent_availability -= 1.5
-                    confidence_penalty = 0.08
-                    # Initialize confidence later, tracking penalty here
-                    reasoning_notes.append("Yüksek finansal risk nedeniyle yetenek çekme zorlaşabilir.")
-                
-                if cfo_roi > 30 and cfo_risk < 5:
-                    talent_availability += 1.0
-                    reasoning_notes.append("Yüksek ROI potansiyeli yetenek havuzunu genişletebilir.")
-
-            # Analyze CEO
-            ceo_metrics = get_agent_metrics(previous_messages, "CEO")
-            if ceo_metrics:
-                market_alignment = ceo_metrics.get("market_alignment", 0)
-                growth_potential = ceo_metrics.get("growth_potential", 0)
-                
-                if market_alignment < 4:
-                    team_impact -= 1.0
-                    reasoning_notes.append("Pazar belirsizliği ekip motivasyonunu düşürebilir.")
-                
-                if growth_potential >= 8:
-                    workload_score += 0.8
-                    reasoning_notes.append("Büyüme vizyonu iş yükü toleransını artırıyor.")
-
-        # Ensure metrics stay in bounds after adjustments
-        talent_availability = round(max(0, min(10, talent_availability)), 1)
-        team_impact = round(max(0, min(10, team_impact)), 1)
-        workload_score = round(max(0, min(10, workload_score)), 1)
-
-        # 4. Base Stance Logic
-        # Composite score calculation
-        composite = (talent_availability + team_impact + workload_score) / 30.0
-        
-        if composite >= 0.6:
-            stance = "support"
-            confidence = min(1.0, 0.5 + composite * 0.5)
-        elif composite >= 0.35:
-            stance = "neutral"
-            confidence = 0.5 + abs(composite - 0.475) * 0.8
-        else:
-            stance = "oppose"
-            confidence = min(1.0, 0.5 + (0.35 - composite) * 1.5)
+            strategy_stance_info = get_agent_stance(previous_messages, "Strategy")
+            salary_stance_info = get_agent_stance(previous_messages, "Salary")
             
-        # Apply confidence penalties/boosts from cross-analysis
-        # (Re-applying reasoning notes impact on confidence)
-        if current_round > 1:
-             # Basic confidence mods from cross-metrics logic were tracking in notes but not applied to 'confidence' variable yet
-             # Let's apply them based on the logic described in inputs
-             if previous_messages: 
-                cfo_metrics = get_agent_metrics(previous_messages, "CFO")
-                if cfo_metrics:
-                    if cfo_metrics.get("risk_score", 0) > 7:
-                        confidence -= 0.08
-                    if cfo_metrics.get("roi_estimate", 0) > 30 and cfo_metrics.get("risk_score", 0) < 5:
-                        confidence += 0.05
-                
-                # CEO metrics logic didn't change confidence directly in the prompt requirement, only metrics
-                # logic: "market_alignment < 4 → team_impact -= 1.0" -> affects composite -> affects stance/confidence indirectly
-                
-                # Stance Shift Logic
-                ceo_stance = get_agent_stance(previous_messages, "CEO")
-                cfo_stance = get_agent_stance(previous_messages, "CFO")
-                
-                if ceo_stance and cfo_stance:
-                    ceo_s, _ = ceo_stance
-                    cfo_s, _ = cfo_stance
+            if strategy_stance_info:
+                strat_s, _ = strategy_stance_info
+                if strat_s == "oppose" and stance == "support":
+                    confidence -= 0.15
+                    reasoning_notes.append("Strategy found technical issues. HR confidence reduced.")
                     
-                    if stance == "oppose" and ceo_s == "support" and cfo_s == "support":
-                        if composite > 0.25:
-                            stance = "neutral"
-                            confidence = 0.45
-                            reasoning_notes.append("CEO ve CFO'nun tam desteği nedeniyle itiraz askıya alındı.")
-                    elif stance == "support" and ceo_s == "oppose" and cfo_s == "oppose":
-                        stance = "neutral"
-                        confidence = 0.5
-                        reasoning_notes.append("Yönetim ekibinin itirazı nedeniyle destek geri çekildi.")
-                    elif ceo_s == "support" and cfo_s == "oppose":
-                        confidence -= 0.05
-                        reasoning_notes.append("Liderlikteki fikir ayrılığı (CEO vs CFO) riski artırıyor.")
+            if salary_stance_info:
+                sal_s, _ = salary_stance_info
+                if sal_s == "oppose" and stance == "support":
+                    confidence -= 0.10
+                    reasoning_notes.append("Salary expectations mismatch. HR confidence reduced.")
 
-        # Ensure confidence bounds
         confidence = max(0.3, min(1.0, confidence))
         
-        # JIRA-02: Build reasoning prompt content
-        llm_persona_text = self._build_reasoning_prompt(scenario_inputs)
+        # 5. Reasoning Generation (Katman 2)
+        system_p = self._build_system_prompt()
+        user_p = self._build_reasoning_prompt(scenario_inputs, stance, confidence)
         
-        # 5. Reasoning Generation
-        base_reasoning = (
-            f"{llm_persona_text} | "
-            f"Ekip hazırlığı {team_readiness}/10, {hiring_needed} kişi alınması gerekiyor "
-            f"({total_readiness_months} ay adaptasyon). "
-            f"Yetenek: {talent_availability}/10, Etki: {team_impact}/10."
+        fallback_reasoning = (
+            f"Churn risk {churn_risk}/10 and cultural fit {cultural_fit}/10. "
         )
-        
         if reasoning_notes:
-            final_reasoning = f"{base_reasoning} Çapraz analiz: {' '.join(reasoning_notes)} Sonuç: {stance} (%{int(confidence*100)})."
+            fallback_reasoning += "Cross analysis: " + " ".join(reasoning_notes) + " "
+        fallback_reasoning += f"Result: {stance} ({int(confidence*100)}%)."
+        
+        llm_reasoning = self._call_llm(system_p, user_p, scenario_inputs.candidate_name)
+        
+        if "[Culture Fallback]" in llm_reasoning:
+            final_reasoning = fallback_reasoning + " | " + llm_reasoning
         else:
-            final_reasoning = f"{base_reasoning} Sonuç: {stance} (%{int(confidence*100)})."
+            final_reasoning = llm_reasoning
 
         return AgentMessage(
-            agent="HR",
+            agent="Culture",
             stance=stance,
             confidence=round(confidence, 2),
             reasoning=final_reasoning,
             metrics={
-                "talent_availability": talent_availability,
-                "team_impact": team_impact,
-                "workload_score": workload_score,
+                "churn_risk": round(churn_risk, 1),
+                "cultural_fit": round(cultural_fit, 1)
             },
             round_number=current_round
-        )
-
-        
-        return AgentMessage(
-            agent="HR",
-            stance=stance,
-            confidence=round(confidence, 2),
-            reasoning=reasoning,
-            metrics={
-                "talent_availability": talent_availability,
-                "team_impact": team_impact,
-                "workload_score": workload_score,
-            },
         )

@@ -1,85 +1,68 @@
 from app.domain.agents.base import Agent
 from app.domain.models import AgentMessage, ScenarioInput, Stance, get_agent_metrics, get_agent_stance
+from app.infrastructure.llm import call_llm
 
-def _to_strategic_inputs(scenario: ScenarioInput) -> dict:
+class StrategyAgent(Agent):
     """
-    Convert ScenarioInput to standardized strategic inputs format.
+    Strategy & Talent Expert (CTO Mindset)
     
-    Args:
-        scenario: Input scenario data
-        
-    Returns:
-        Dict with strategic_fit (0-1), market_risk (0-1), growth_priority
-    """
-    # strategic_fit: ROI normalized to 0-1 range (0% = 0, 100%+ = 1)
-    strategic_fit = min(1.0, max(0.0, scenario.expected_roi_percent / 100.0))
-    
-    # market_risk: risk_level (1-10 scale) normalized to 0-1
-    market_risk = scenario.risk_level / 10.0
-    
-    # Dynamic growth priority based on budget size
-    # Small projects (<1M) get lower priority (0.3), large projects (>10M) get full priority (1.0)
-    growth_priority = min(1.0, max(0.3, scenario.budget_million_usd / 10.0))
-    
-    return {
-        "strategic_fit": strategic_fit,
-        "market_risk": market_risk,
-        "growth_priority": growth_priority,
-    }
-
-class CEOAgent(Agent):
-    """
-    CEO Agent: Strategic evaluation focusing on growth, market, and vision.
-    
+    Evaluates the candidate's technical capability and experience depth.
     Metrics produced:
-        - growth_potential (0-10): Estimated growth opportunity
-        - market_alignment (0-10): Alignment with market trends and strategy
+        - tech_alignment (0-10): Raw technical test score scaled
+        - experience_depth (0-10): Experience mapped to a 0-10 scale
     """
     
-    def _build_reasoning_prompt(self, scenario_inputs: ScenarioInput) -> str:
-        """
-        CEO ajanı için role özgü formatlanmış analiz cümlesi oluşturur.
-        Bu şimdilik reasoning alanında loglanır, ileride bir LLM promptunda kullanılacak.
-        """
-        return f"[CEO Metni]: Stratejik büyüme ve pazar uyumu odaklı analiz. (Senaryo: {scenario_inputs.name})"
+    def _build_system_prompt(self) -> str:
+        return (
+            "You are a ruthless, tech-focused CTO Strategy Expert in a tech company. "
+            "You evaluate candidates strictly based on their technical test score and experience years. "
+            "You MUST respond in English only."
+        )
+
+    def _build_reasoning_prompt(self, scenario_inputs: ScenarioInput, stance: str, confidence: float) -> str:
+        return (
+            f"Candidate: {scenario_inputs.candidate_name}\n"
+            f"Role: {scenario_inputs.applied_role}\n"
+            f"Experience: {scenario_inputs.experience_years} years\n"
+            f"Tech Test Score: {scenario_inputs.tech_test_score}/100\n\n"
+            f"Based on your mathematical rules, your stance is '{stance}' with {confidence*100}% confidence.\n"
+            "Explain this decision in 2-3 short, highly technical sentences. "
+            "Do not change the stance, just justify it."
+        )
+
+    def _call_llm(self, system_prompt: str, user_prompt: str, scenario_name: str) -> str:
+        try:
+            full_prompt = f"{system_prompt}\n\n{user_prompt}"
+            return call_llm(full_prompt, agent_name="Strategy", scenario_name=scenario_name)
+        except Exception as e:
+            return f"[Strategy Fallback] Connection to LLM failed. Reason: {str(e)}"
 
     def analyze(
         self,
         scenario_inputs: ScenarioInput,
         previous_messages: list[AgentMessage] | None = None,
     ) -> AgentMessage:
-        """
-        Perform strategic analysis of the scenario.
         
-        Args:
-            scenario_inputs: Scenario data to analyze
-            previous_messages: Optional messages from previous rounds
-            
-        Returns:
-            AgentMessage with CEO's strategic assessment
-        """
-        strategic_inputs = _to_strategic_inputs(scenario_inputs)
-        
-        strategic_fit = strategic_inputs["strategic_fit"]
-        market_risk = strategic_inputs["market_risk"]
-        growth_priority = strategic_inputs["growth_priority"]
-
-        # 1. Base Metrics Calculation
-        growth_potential = (strategic_fit * 0.7 + growth_priority * 0.3) * 10
-        market_alignment = (1.0 - market_risk) * 10
+        # 1. Base Metrics Calculation (Katman 1: Deterministik formüller)
+        tech_alignment = min(10.0, max(0.0, scenario_inputs.tech_test_score / 10.0))
+        experience_depth = min(10.0, max(0.0, scenario_inputs.experience_years * 1.5))
         
         # 2. Base Stance Logic
-        raw_score = (growth_potential * 0.6 + market_alignment * 0.4) / 10.0
-        
-        if raw_score >= 0.6:
-            stance = "support"
-            confidence = min(0.9, 0.5 + (raw_score - 0.6))
-        elif raw_score >= 0.3:
-            stance = "neutral"
-            confidence = 0.6
-        else:
+        if scenario_inputs.tech_test_score < 50:
             stance = "oppose"
-            confidence = min(0.9, 0.5 + (0.3 - raw_score))
+            confidence = 0.85
+        elif scenario_inputs.tech_test_score < 70 and scenario_inputs.experience_years > 5:
+            stance = "oppose"
+            confidence = 0.75  # High experience but poor test score -> bad
+        elif scenario_inputs.tech_test_score >= 80 and scenario_inputs.experience_years >= 3:
+            stance = "support"
+            confidence = 0.90
+        elif scenario_inputs.tech_test_score >= 70:
+            stance = "support"
+            confidence = 0.65
+        else:
+            stance = "neutral"
+            confidence = 0.50
             
         # 3. Round Tracking
         current_round = 1
@@ -90,81 +73,54 @@ class CEOAgent(Agent):
         
         # 4. Cross-Metric Analysis (Only after Round 1)
         if current_round > 1 and previous_messages:
-            # Analyze CFO
-            cfo_metrics = get_agent_metrics(previous_messages, "CFO")
-            if cfo_metrics:
-                cfo_risk = cfo_metrics.get("risk_score", 0)
-                cfo_roi = cfo_metrics.get("roi_estimate", 0)
-                
-                if cfo_risk > 7:
-                    penalty = min(0.15, (cfo_risk - 7) * 0.05)
-                    confidence -= penalty
-                    reasoning_notes.append(f"CFO'nun yüksek risk uyarısı ({cfo_risk}/10) güveni düşürdü (-{penalty:.2f}).")
-                
-                if cfo_roi < 10.0 and stance == "support":
-                    confidence -= 0.1
-                    reasoning_notes.append("CFO'nun düşük ROI tahmini nedeniyle güven azaldı.")
-
-            # Analyze HR
-            hr_metrics = get_agent_metrics(previous_messages, "HR")
-            if hr_metrics:
-                team_impact = hr_metrics.get("team_impact", 5)
-                talent_availability = hr_metrics.get("talent_availability", 5)
-                
-                if team_impact < 3:
-                    confidence -= 0.1
-                    reasoning_notes.append("HR'ın olumsuz ekip etkisi raporu endişe verici.")
-                
-                if talent_availability < 3 and scenario_inputs.budget_million_usd > 5:
-                    confidence -= 0.08
-                    reasoning_notes.append("Büyük bütçeli projede yetenek eksikliği riski var.")
+            # HR (Culture) info check
+            culture_metrics = get_agent_metrics(previous_messages, "Culture")
+            culture_stance_info = get_agent_stance(previous_messages, "Culture")
             
-            # Stance Shift Logic
-            cfo_stance_info = get_agent_stance(previous_messages, "CFO")
-            hr_stance_info = get_agent_stance(previous_messages, "HR")
+            if culture_stance_info:
+                cult_s, _ = culture_stance_info
+                if cult_s == "oppose" and stance == "support":
+                    confidence -= 0.15
+                    reasoning_notes.append("Culture Agent flagged high risk. Strategy confidence reduced.")
+                    
+            # CFO (Salary) info check
+            salary_metrics = get_agent_metrics(previous_messages, "Salary")
+            salary_stance_info = get_agent_stance(previous_messages, "Salary")
             
-            if cfo_stance_info and hr_stance_info:
-                cfo_s, _ = cfo_stance_info
-                hr_s, _ = hr_stance_info
-                
-                if cfo_s == "oppose" and hr_s == "oppose" and stance == "support":
-                    stance = "neutral"
-                    confidence = 0.5
-                    reasoning_notes.append("Diğer tüm birimler karşı çıktığı için görüş NÖTR olarak revize edildi.")
-                elif cfo_s == "support" and hr_s == "support" and stance == "oppose":
-                    stance = "neutral"
-                    confidence = 0.5
-                    reasoning_notes.append("Ekip konsensüsü nedeniyle karşıt görüş yumuşatıldı.")
-                elif cfo_s != hr_s:
-                    confidence -= 0.05
-                    reasoning_notes.append("Yönetim ekibindeki fikir, güveni hafif sarstı.")
+            if salary_stance_info:
+                sal_s, _ = salary_stance_info
+                if sal_s == "oppose" and stance == "support":
+                    confidence -= 0.10
+                    reasoning_notes.append("Salary expectation is too high. Strategy confidence reduced.")
 
-        # Ensure confidence bounds
         confidence = max(0.3, min(1.0, confidence))
         
-        # JIRA-02: Build reasoning prompt content
-        llm_persona_text = self._build_reasoning_prompt(scenario_inputs)
+        # 5. Reasoning Generation (Katman 2: LLM reasoning)
+        system_p = self._build_system_prompt()
+        user_p = self._build_reasoning_prompt(scenario_inputs, stance, confidence)
         
-        # 5. Reasoning Generation
-        base_reasoning = (
-            f"{llm_persona_text} | "
-            f"Stratejik uyum %{int(strategic_fit*100)} ve pazar riski {int(market_risk*10)}/10. "
-            f"Potansiyel: {growth_potential:.1f}/10."
+        fallback_reasoning = (
+            f"Tech alignment {tech_alignment}/10 and experience depth {experience_depth}/10. "
         )
-        
         if reasoning_notes:
-            final_reasoning = f"{base_reasoning} Çapraz analiz: {' '.join(reasoning_notes)} Sonuç: {stance} (%{int(confidence*100)})."
+            fallback_reasoning += "Cross analysis: " + " ".join(reasoning_notes) + " "
+        fallback_reasoning += f"Result: {stance} ({int(confidence*100)}%)."
+        
+        llm_reasoning = self._call_llm(system_p, user_p, scenario_inputs.candidate_name)
+        
+        if "[Strategy Fallback]" in llm_reasoning:
+            final_reasoning = fallback_reasoning + " | " + llm_reasoning
         else:
-            final_reasoning = f"{base_reasoning} Sonuç: {stance} (%{int(confidence*100)})."
+            final_reasoning = llm_reasoning
 
         return AgentMessage(
-            agent="CEO",
+            agent="Strategy",
             stance=stance,
             confidence=round(confidence, 2),
             reasoning=final_reasoning,
             metrics={
-                "growth_potential": round(growth_potential, 1),
-                "market_alignment": round(market_alignment, 1)
+                "tech_alignment": round(tech_alignment, 1),
+                "experience_depth": round(experience_depth, 1)
             },
             round_number=current_round
         )

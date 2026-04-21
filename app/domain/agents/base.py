@@ -19,10 +19,10 @@ class Agent(ABC):
     """
     
     @abstractmethod
-    def _build_reasoning_prompt(self, scenario_inputs: ScenarioInput) -> str:
+    def _build_reasoning_prompt(self, scenario_inputs: ScenarioInput, stance: str, confidence: float) -> str:
         """
-        Her ajanın kendi karakterine/alanına özgü hazırladığı, şimdilik reasoning alanını 
-        zenginleştiren ama ileride LLM prompt'u olarak kullanılacak metin şablonunu oluşturur.
+        Her ajanın kendi karakterine özgü LLM prompt'unu oluşturur.
+        Stance ve confidence, Katman 1 matematik sonuçlarına göre belirlenir.
         """
         raise NotImplementedError
         
