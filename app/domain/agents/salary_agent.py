@@ -42,44 +42,37 @@ class SalaryAgent(Agent):
         self,
         scenario_inputs: ScenarioInput,
         previous_messages: list[AgentMessage] | None = None,
+        round_number: int = 1,
     ) -> AgentMessage:
-        
+
         # 1. Base Metrics Calculation (Katman 1: Matematik)
-        # Basit bir piyasa verisi simülasyonu
         base_budget = 50000
         if "backend" in scenario_inputs.applied_role.lower() or "data" in scenario_inputs.applied_role.lower():
             base_budget = 80000
         elif "frontend" in scenario_inputs.applied_role.lower() or "mobile" in scenario_inputs.applied_role.lower():
             base_budget = 70000
-            
+
         allowed_max = base_budget + (scenario_inputs.experience_years * 5000)
-        
-        # Calculate how much expected salary deviates from allowed max
         diff_ratio = scenario_inputs.expected_salary / allowed_max
-        
+
         budget_fit = min(10.0, max(0.0, 10.0 - ((diff_ratio - 1.0) * 20.0)))
         market_alignment = min(10.0, max(0.0, 10.0 - abs(1.0 - diff_ratio) * 10.0))
 
         # 2. Base Stance Logic
-        if diff_ratio > 1.2:  # Expected is >20% over budget limits
+        if diff_ratio > 1.2:
             stance = "oppose"
             confidence = 0.90
-        elif diff_ratio > 1.05:  # Expected is slightly over
+        elif diff_ratio > 1.05:
             stance = "oppose"
             confidence = 0.60
-        else:  # Within or under budget
+        else:
             stance = "support"
             confidence = 0.80
 
-        # 3. Round Tracking
-        current_round = 1
-        if previous_messages:
-            current_round = max(m.round_number for m in previous_messages) + 1
-            
         reasoning_notes = []
-        
-        # 4. Cross-Metric Analysis
-        if current_round > 1 and previous_messages:
+
+        # 3. Cross-Metric Analysis
+        if round_number > 1 and previous_messages:
             strategy_stance_info = get_agent_stance(previous_messages, "Strategy")
             culture_stance_info = get_agent_stance(previous_messages, "Culture")
             
@@ -143,6 +136,6 @@ class SalaryAgent(Agent):
                 "budget_fit": round(budget_fit, 1),
                 "market_alignment": round(market_alignment, 1)
             },
-            round_number=current_round
+            round_number=round_number,
         )
 

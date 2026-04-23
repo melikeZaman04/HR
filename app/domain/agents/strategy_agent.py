@@ -41,12 +41,13 @@ class StrategyAgent(Agent):
         self,
         scenario_inputs: ScenarioInput,
         previous_messages: list[AgentMessage] | None = None,
+        round_number: int = 1,
     ) -> AgentMessage:
-        
+
         # 1. Base Metrics Calculation (Katman 1: Deterministik formüller)
         tech_alignment = min(10.0, max(0.0, scenario_inputs.tech_test_score / 10.0))
         experience_depth = min(10.0, max(0.0, scenario_inputs.experience_years * 1.5))
-        
+
         # 2. Base Stance Logic
         if scenario_inputs.tech_test_score < 50:
             stance = "oppose"
@@ -63,16 +64,11 @@ class StrategyAgent(Agent):
         else:
             stance = "neutral"
             confidence = 0.50
-            
-        # 3. Round Tracking
-        current_round = 1
-        if previous_messages:
-            current_round = max(m.round_number for m in previous_messages) + 1
-            
+
         reasoning_notes = []
-        
-        # 4. Cross-Metric Analysis (Only after Round 1)
-        if current_round > 1 and previous_messages:
+
+        # 3. Cross-Metric Analysis (Only after Round 1)
+        if round_number > 1 and previous_messages:
             # HR (Culture) info check
             culture_metrics = get_agent_metrics(previous_messages, "Culture")
             culture_stance_info = get_agent_stance(previous_messages, "Culture")
@@ -138,5 +134,5 @@ class StrategyAgent(Agent):
                 "tech_alignment": round(tech_alignment, 1),
                 "experience_depth": round(experience_depth, 1)
             },
-            round_number=current_round
+            round_number=round_number,
         )
