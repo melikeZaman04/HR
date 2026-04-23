@@ -729,9 +729,9 @@
     cultural_fit:       'Kültür Uyumu',
     budget_fit:         'Bütçe Uyumu',
     market_alignment:   'Piyasa Dengesi',
-    weak_focus_count:   'Zayıf Odak',
-    strong_focus_count: 'Güçlü Odak',
-    categories_covered: 'Kategori Sayısı',
+    risk_signal_count:  'Risk Sinyali',
+    categories_covered: 'Kategori',
+    opposing_agents:    'Karşı Ajan',
   };
 
   function stanceClass(s) {
@@ -760,7 +760,7 @@
 
     const confPct = key === 'question' ? 0 : msg.confidence;
     document.getElementById('conf-' + key).textContent = key === 'question'
-      ? `${Object.values(msg.metrics || {}).reduce((a,b)=>a+b,0).toFixed(0)} puan`
+      ? 'Soru üretici'
       : fmt(msg.confidence);
     document.getElementById('fill-' + key).style.width = (confPct * 100) + '%';
 

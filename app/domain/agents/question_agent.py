@@ -35,9 +35,10 @@ class QuestionAgent(Agent):
             "2. Her soru adayın profilindeki somut bir tespite dayansın — "
             "genel sorular kesinlikle yasak ('kendinizi anlatın', 'güçlü yanlarınız' gibi)\n"
             "3. Doğal, akıcı Türkçe kullan — çeviri hissi veren ifadeler yasak\n"
-            "4. Zayıf noktalara odaklanan sorular çoğunlukta olsun (en az 5-6 adet)\n"
-            "5. Güçlü noktalara 2-3 doğrulama sorusu ekle\n"
-            "6. Karar verme — sadece soru üret"
+            "4. Her soru farklı bir cümle yapısıyla başlasın — aynı kelimeyle başlayan iki soru olamaz\n"
+            "5. Zayıf noktalara odaklanan sorular çoğunlukta olsun (en az 5-6 adet)\n"
+            "6. Güçlü noktalara 2-3 doğrulama sorusu ekle\n"
+            "7. Karar verme — sadece soru üret"
         )
 
     def _build_reasoning_prompt(
@@ -182,15 +183,19 @@ class QuestionAgent(Agent):
         output_upper = llm_output.upper()
         categories_covered = sum(1 for tag in self._CATEGORIES if tag in output_upper)
 
+        # risk_signal_count: metric data points flagged regardless of agent stance
+        # (meaningful even when all decision agents agree — borderline values still warrant probing)
+        risk_signals = self._build_risk_signals(scenario_inputs)
+
         return AgentMessage(
             agent="Question",
             stance="neutral",
             confidence=0.0,
             reasoning=llm_output,
             metrics={
-                "weak_focus_count": float(len(weak_agents)),
-                "strong_focus_count": float(len(strong_agents)),
+                "risk_signal_count": float(len(risk_signals)),
                 "categories_covered": float(categories_covered),
+                "opposing_agents": float(len(weak_agents)),
             },
             round_number=round_number,
         )

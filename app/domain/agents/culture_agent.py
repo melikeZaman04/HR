@@ -41,48 +41,56 @@ class CultureAgent(Agent):
         self,
         scenario_inputs: ScenarioInput,
         previous_messages: list[AgentMessage] | None = None,
+        round_number: int = 1,
     ) -> AgentMessage:
-        
+
         # 1. Base Metrics Calculation (Katman 1: Matematik)
-        # Churn risk: lower months = higher risk
         if scenario_inputs.avg_months_per_job < 6:
             churn_risk = 9.5
         elif scenario_inputs.avg_months_per_job < 12:
             churn_risk = 8.0
+        elif scenario_inputs.avg_months_per_job < 18:
+            churn_risk = 6.0   # 12-17 months: above average churn risk
         elif scenario_inputs.avg_months_per_job < 24:
-            churn_risk = 5.0
+            churn_risk = 4.0   # 18-23 months: acceptable tenure
         else:
-            churn_risk = 2.0
-            
-        # Cultural fit based on glassdoor (assumes passing a high culture company means good traits)
+            churn_risk = 2.0   # 24+ months: stable
+
         cultural_fit = min(10.0, max(0.0, scenario_inputs.glassdoor_score * 2.0))
-        
-        # 2. Base Stance Logic
-        if churn_risk >= 8.0: # Job hopper
+
+        # 2. Base Stance Logic — confidence weighted by both churn_risk and cultural_fit
+        if churn_risk >= 8.0:
             stance = "oppose"
             confidence = 0.85
+        elif churn_risk >= 6.0 and cultural_fit < 6.0:
+            stance = "oppose"
+            confidence = 0.70
         elif churn_risk >= 5.0 and cultural_fit < 6.0:
             stance = "oppose"
             confidence = 0.60
+        elif churn_risk <= 2.0 and cultural_fit >= 8.0:
+            stance = "support"
+            confidence = 0.92
         elif churn_risk <= 3.0 and cultural_fit >= 7.0:
             stance = "support"
-            confidence = 0.90
-        elif churn_risk <= 6.0:
+            confidence = 0.85
+        elif churn_risk <= 4.0 and cultural_fit >= 7.0:
             stance = "support"
-            confidence = 0.60
+            confidence = 0.75  # decent tenure + good culture
+        elif churn_risk <= 6.0 and cultural_fit >= 7.0:
+            stance = "support"
+            confidence = 0.65  # moderate tenure but strong culture saves it
+        elif churn_risk <= 6.0 and cultural_fit >= 5.0:
+            stance = "neutral"
+            confidence = 0.55  # mixed signals
         else:
             stance = "neutral"
             confidence = 0.50
-            
-        # 3. Round Tracking
-        current_round = 1
-        if previous_messages:
-            current_round = max(m.round_number for m in previous_messages) + 1
-            
+
         reasoning_notes = []
-        
-        # 4. Cross-Metric Analysis
-        if current_round > 1 and previous_messages:
+
+        # 3. Cross-Metric Analysis
+        if round_number > 1 and previous_messages:
             strategy_stance_info = get_agent_stance(previous_messages, "Strategy")
             salary_stance_info = get_agent_stance(previous_messages, "Salary")
             
@@ -143,5 +151,5 @@ class CultureAgent(Agent):
                 "churn_risk": round(churn_risk, 1),
                 "cultural_fit": round(cultural_fit, 1)
             },
-            round_number=current_round
+            round_number=round_number,
         )
