@@ -841,25 +841,24 @@
 
   // ── Interview Questions ─────────────────────────────────────────────────────
   function parseQuestions(text) {
+    // ASCII tags only — avoids Turkish İ/I uppercase mismatch in JS
     const tagMap = {
-      'DAVRANIŞSAL': 'DAVRANISSAL',
-      'TEKNİK':      'TEKNIK',
+      'DAVRANISSAL': 'DAVRANISSAL',
+      'TEKNIK':      'TEKNIK',
       'DURUMSAL':    'DURUMSAL',
-      'KÜLTÜREL':    'KULTUREL',
+      'KULTUREL':    'KULTUREL',
     };
 
-    // Split by numbered list or by tag occurrences
     const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean);
     const items = [];
 
     for (const line of lines) {
-      // Remove leading number like "1." or "1)"
       const clean = line.replace(/^\d+[\.\)]\s*/, '');
+      const upper = clean.toUpperCase(); // ASCII-safe
 
       let matched = null;
       for (const [tag, key] of Object.entries(tagMap)) {
-        const pattern = `[${tag}]`;
-        if (clean.toUpperCase().includes(tag)) {
+        if (upper.includes(`[${tag}]`)) {
           matched = { tag: key, text: clean.replace(new RegExp(`\\[${tag}\\]`, 'i'), '').trim() };
           break;
         }
@@ -867,14 +866,14 @@
 
       if (matched) {
         items.push(matched);
-      } else if (clean.length > 20 && !clean.startsWith('#') && !clean.startsWith('Kural')) {
+      } else if (clean.length > 20 && !clean.startsWith('#') && !clean.startsWith('Kural') && !clean.startsWith('Toplam')) {
         items.push({ tag: 'raw', text: clean });
       }
     }
     return items;
   }
 
-  function renderQuestions(reasoning, metrics) {
+  function renderQuestions(reasoning, weakCount) {
     const sec  = document.getElementById('questionsSection');
     const list = document.getElementById('questionsList');
     const meta = document.getElementById('qMeta');
@@ -885,9 +884,10 @@
       return;
     }
 
-    const catCount = metrics?.categories_covered ?? 0;
-    const weak     = metrics?.weak_focus_count    ?? 0;
-    meta.textContent = `${items.length} soru • ${catCount} kategori • ${weak} zayıf odak`;
+    // Compute counts from parsed items (no dependency on backend metrics)
+    const catCount = new Set(items.filter(i => i.tag !== 'raw').map(i => i.tag)).size;
+    const weak     = weakCount ?? 0;
+    meta.textContent = `${items.length} soru • ${catCount} kategori • ${weak} zayıf ajan odaklı`;
 
     list.innerHTML = '';
     for (const item of items) {
@@ -974,6 +974,11 @@
       // Get detailed results
       const detail = await apiFetch(`/api/v1/scenarios/${scenarioId}/simulation`);
 
+      // Count opposing decision agents to pass as context to question renderer
+      const weakCount = detail.agent_outputs.filter(
+        o => o.agent_name !== 'Question' && o.score <= 35
+      ).length;
+
       // Map agent outputs to cards
       for (const out of detail.agent_outputs) {
         const agentName = out.agent_name;
@@ -991,9 +996,9 @@
           metrics: {},
         });
 
-        // Render questions if it's the Question agent
+        // Render questions with accurate weak-agent count
         if (agentName === 'Question') {
-          renderQuestions(out.rationale, null);
+          renderQuestions(out.rationale, weakCount);
         }
       }
 
