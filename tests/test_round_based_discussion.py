@@ -172,25 +172,25 @@ class TestAgentsSeeHistory:
         received_messages = {"Strategy": [], "Salary": [], "Culture": []}
 
         class TrackedStrategyAgent(StrategyAgent):
-            def analyze(self, scenario, previous_messages=None):
+            def analyze(self, scenario, previous_messages=None, round_number=1):
                 received_messages["Strategy"].append(
                     len(previous_messages) if previous_messages else 0
                 )
-                return super().analyze(scenario, previous_messages)
+                return super().analyze(scenario, previous_messages, round_number)
 
         class TrackedSalaryAgent(SalaryAgent):
-            def analyze(self, scenario, previous_messages=None):
+            def analyze(self, scenario, previous_messages=None, round_number=1):
                 received_messages["Salary"].append(
                     len(previous_messages) if previous_messages else 0
                 )
-                return super().analyze(scenario, previous_messages)
+                return super().analyze(scenario, previous_messages, round_number)
 
         class TrackedCultureAgent(CultureAgent):
-            def analyze(self, scenario, previous_messages=None):
+            def analyze(self, scenario, previous_messages=None, round_number=1):
                 received_messages["Culture"].append(
                     len(previous_messages) if previous_messages else 0
                 )
-                return super().analyze(scenario, previous_messages)
+                return super().analyze(scenario, previous_messages, round_number)
 
         with patch('app.application.use_cases.scenario_service.AgentFactory') as mock_factory:
             mock_factory.create_default_agents.return_value = [
@@ -336,8 +336,9 @@ class TestEarlyTermination:
         result = await service.run_simulation(scenario_id=1, n_rounds=5)
 
         if result.consensus_reached:
-            stances = {msg.stance for msg in result.final_messages}
-            assert len(stances) == 1
+            # QuestionAgent always returns neutral and is excluded from consensus logic
+            decision_stances = {msg.stance for msg in result.final_messages if msg.agent != "Question"}
+            assert len(decision_stances) == 1
 
     async def test_stability_early_stop(self, mock_repositories):
         """Simulation should stop if no agent changes position."""
@@ -400,11 +401,13 @@ class TestResultStructure:
         assert hasattr(result, 'aggregated_decision')
 
     async def test_final_messages_match_last_round(self, service):
-        """final_messages should be from the last round."""
+        """final_messages should contain last round messages + QuestionAgent appended after."""
         result = await service.run_simulation(scenario_id=1, n_rounds=2)
 
         last_round = result.rounds[-1]
-        assert result.final_messages == last_round.messages
+        # QuestionAgent is appended to final_messages after the last round
+        decision_messages = [m for m in result.final_messages if m.agent != "Question"]
+        assert decision_messages == last_round.messages
 
     async def test_agent_outputs_match_final_messages(self, service):
         """agent_outputs (legacy) should correspond to final_messages."""
@@ -446,7 +449,8 @@ class TestIntegration:
 
         assert result.scenario_id == 1
         assert result.total_rounds >= 1
-        assert len(result.final_messages) == 3
+        # 3 decision agents + QuestionAgent appended after final round
+        assert len(result.final_messages) == 4
 
     async def test_scenario_not_found_raises(self, mock_repositories):
         """Should raise exception for non-existent scenario."""

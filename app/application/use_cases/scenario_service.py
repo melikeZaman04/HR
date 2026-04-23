@@ -157,9 +157,23 @@ class ScenarioSimulationService:
 
             all_messages.extend(round_messages)
 
-        final_messages = rounds[-1].messages
+        final_messages = rounds[-1].messages[:] # Kopya alalım ki son turu bozmasın
         agent_results = [msg.to_legacy_result() for msg in final_messages]
         aggregated = self.aggregator.aggregate(agent_results, weights=agent_weights)
+
+        # --- 4. Question Agent (Soru Üretici) ---
+        # Ajanların vardığı sonuçları okuyarak mülakat soruları üretir.
+        # Bu ajan aggregatore dahil edilmez ki genel kararı (0 veya 100 skor) bozmasın.
+        question_agent = AgentFactory.create_question_agent()
+        q_msg = question_agent.analyze(
+            scenario_inputs=scenario_inputs,
+            previous_messages=all_messages,
+            round_number=len(rounds) + 1
+        )
+        
+        final_messages.append(q_msg)
+        agent_results.append(q_msg.to_legacy_result())
+        # ----------------------------------------
 
         await self.agent_output_repository.create_many(scenario_id, agent_results)
         await self.final_decision_repository.create(scenario_id, aggregated)
@@ -200,7 +214,7 @@ class ScenarioSimulationService:
         round_messages: list[AgentMessage] = []
 
         for agent in agents:
-            all_prior = []
+            all_prior: list[AgentMessage] = []
             if previous_messages:
                 all_prior.extend(previous_messages)
             if round_messages:
@@ -209,17 +223,9 @@ class ScenarioSimulationService:
             message = agent.analyze(
                 scenario_inputs,
                 previous_messages=all_prior if all_prior else None,
-            )
-
-            message_with_round = AgentMessage(
-                agent=message.agent,
-                stance=message.stance,
-                confidence=message.confidence,
-                reasoning=message.reasoning,
-                metrics=message.metrics,
                 round_number=round_number,
             )
-            round_messages.append(message_with_round)
+            round_messages.append(message)
 
         return round_messages
 
